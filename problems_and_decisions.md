@@ -38,6 +38,11 @@ Decision: submit preliminary real-data results on WASP-39b to NeurIPS ML4PS work
 
 ---
 
+### D11 — Data sharing: GitHub for scripts only, MAST + Zenodo for data [Phase 0]
+JWST FITS files are 500 MB–2 GB each; total WASP-39b corpus is 30–50 GB. GitHub's hard limit is 100 MB per file. Decision: `data/` is gitignored on both tracks. Raw JWST data is sourced directly from MAST by each collaborator running `scripts/download_mast.py`. Processed/standardised corpus is published to Zenodo as a draft record during development, made public at paper submission. This means the Phase 5 public data release is built into the workflow from day one, not retrofitted. Alternative rejected: shared cloud drive (Google Drive/Dropbox) — no versioning, links break, not reproducible for external reviewers.
+
+---
+
 ## Phase 0 Log
 
 *(Empty — Phase 0 not yet started)*
