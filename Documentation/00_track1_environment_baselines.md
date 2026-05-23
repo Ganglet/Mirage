@@ -182,14 +182,68 @@ This is the primary evaluation metric for the entire project. MIRAGE must achiev
 ### Step 6 — sbi-ear (NPE) corner plot
 Load `npe.hdf` (same folder, σ=0.125754) and produce an equivalent corner plot. Expected: ε ≈ 11.6%, ESS ≈ 121,856 (Gebhard 2025 Table 1). This establishes the NPE baseline number.
 
-### Step 7 — Download ABC database
-Changeat & Yip 2023, available on Zenodo. Search "ABC atmospheric retrieval Changeat 2023 Zenodo."
-- 105,887 TauREx3 forward model spectra
-- 26,109 nested-sampling posterior distributions
-- Public, no registration required
+### Step 7 — Download ABC database ✅
 
-### Step 8 — Understand ABC format
-Open one spectrum in Python, print the dataset structure, check parameter names, number of spectral bins, wavelength range. The ABC parameter space (TauREx3) differs from Vasist/Gebhard (petitRADTRANS) — different parameter names, possibly different dimensionality.
+Changeat & Yip 2023, `zenodo.org/records/6770103`. Downloaded all files into `data/abc/`:
+
+| File/Folder | Size | Contents |
+|---|---|---|
+| `Level1Data/` | 3.8 GB | 105,887 synthetic spectra + parameters (training set) |
+| `Level2Data/` | 3.2 GB | 91,392 nested-sampling posteriors (ground truth) |
+| `NeurIPS taurex tutorial/` | 67.6 MB | Tutorial code |
+| `Tutorial - How To Use.ipynb` | 7 kB | Format walkthrough |
+
+### Step 8 — ABC Format ✅
+
+**Level1Data — 105,887 planets:**
+
+`observations.hdf5` — keyed by `Planet_0`, `Planet_1`, ..., `Planet_105886`. Each planet has 4 arrays:
+
+```
+instrument_spectrum  (52,)  float64  — transmission spectrum (Rp/Rs)²
+instrument_noise     (52,)  float64  — per-wavelength 1σ noise
+instrument_wlgrid    (52,)  float64  — wavelength grid, μm, range ~0.55–7.3
+instrument_width     (52,)  float64  — bin widths
+```
+
+`all_target.hdf5` — same keys. Each planet has nested sampling posteriors:
+```
+tracedata  (N_samples, 6)  — posterior samples (N varies per planet, ~2000–3000)
+weights    (N_samples,)    — posterior weights
+```
+Planet attrs contain parameter quartiles but not the parameter names directly.
+
+**6 atmospheric parameters (TauREx3):**
+
+| # | Parameter | Description |
+|---|---|---|
+| 0 | T | Temperature (K) |
+| 1 | log_H2O | Water vapour log abundance |
+| 2 | log_CO2 | CO₂ log abundance |
+| 3 | log_CH4 | Methane log abundance |
+| 4 | log_CO | CO log abundance |
+| 5 | log_NH3 | Ammonia log abundance |
+
+**Level2Data — 91,392 planets with validated posteriors:**
+
+`Ground Truth Package/Tracedata.hdf5` — same tracedata/weights structure. Planet attrs confirm:
+```
+target_order: ['T', 'log_H2O', 'log_CO2', 'log_CH4', 'log_CO', 'log_NH3']
+```
+`FM_Parameter_Table.csv` — ground truth θ₀ values for each planet (columns: planet_ID, planet_temp, log_H2O, log_CO2, log_CH4, log_CO, log_NH3).
+
+`AuxillaryTable.csv` — stellar/planetary physical parameters (mass, radius, gravity, etc.) — not needed for Phase 0.
+
+**Critical difference from Gebhard/Vasist:**
+
+| Property | ABC (TauREx3) | Gebhard/Vasist (petitRADTRANS) |
+|---|---|---|
+| Parameters | 6 | 16 |
+| Spectral bins | 52 | 379 |
+| Wavelength | 0.55–7.3 μm | 0.6–5.0 μm |
+| Forward model | TauREx3 | petitRADTRANS |
+
+The adapter (Step 9) must account for all four differences.
 
 ### Step 9 — Write data loader adapter
 fm4ar's data loaders expect petitRADTRANS-format HDF5 files with specific keys. ABC uses TauREx3 with different keys and structure. A thin adapter class or wrapper function maps ABC → fm4ar's expected format without modifying fm4ar's source.
@@ -215,8 +269,8 @@ These numbers — FMPE and NPE IS-efficiency on ABC — are the synthetic benchm
 - [x] Gebhard dataset downloaded (5 files, ~4 GB total)
 - [x] FMPE corner plot produced — ε = 19.05%, ESS = 199,762 ✅ matches paper
 - [x] NPE corner plot produced — ε = 11.62%, ESS = 121,856 ✅ matches paper
-- [ ] ABC database downloaded
-- [ ] ABC format understood
+- [x] ABC database downloaded — zenodo.org/records/6770103, Level1Data + Level2Data in data/abc/
+- [x] ABC format understood — 52 bins, 6 params (T + 5 molecules), TauREx3, 105,887 spectra
 - [ ] Data loader adapter written (fm4ar → ABC)
 - [ ] fm4ar posteriors on ABC — corner plot + IS-efficiency number
 - [ ] sbi-ear posteriors on ABC — corner plot + IS-efficiency number
