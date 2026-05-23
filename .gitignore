@@ -1,3 +1,7 @@
+# External repos — cloned locally, not submodules; see README for clone instructions
+fm4ar/
+sbi-ear/
+
 # Data — never commit, download via scripts/download_mast.py and scripts/download_abc.py
 data/
 
