@@ -1,0 +1,117 @@
+# FMPE on ABC dataset — Phase 0 baseline
+# ABC: 52 spectral bins, 6 atmospheric parameters (TauREx3)
+#
+# CPU smoke test: n_train_samples=1000, epochs=5 (~minutes on Mac)
+# Cluster run:    n_train_samples=73000, epochs=512, scale up hidden_dims
+
+# -----------------------------------------------------------------------------
+# DATASET
+# -----------------------------------------------------------------------------
+
+dataset:
+  file_path: "data/abc/abc_train.hdf"
+  n_train_samples: 65000
+  n_valid_samples: 8113
+  random_seed: 42
+
+theta_scaler:
+  method: "MeanStdScaler"
+  kwargs:
+    dataset: "abc"
+
+# -----------------------------------------------------------------------------
+# MODEL
+# Context embedding: Concatenate(wlen, flux) → (104,) → DenseResidualNet → 128
+# fm4ar sets dim_theta=6, dim_context=128 automatically from the dataset.
+# -----------------------------------------------------------------------------
+
+model:
+  model_type: "fmpe"
+  random_seed: 42
+  t_theta_with_glu: True
+  context_with_glu: False
+  sigma_min: 0.0001
+  time_prior_exponent: 2.0
+
+  context_embedding_net:
+    - block_type: "Concatenate"
+      kwargs:
+        keys: ["wlen", "flux"]
+    - block_type: "DenseResidualNet"
+      kwargs:
+        hidden_dims: [256, 128]
+        activation: "ELU"
+        output_dim: 4096
+        dropout: 0.0
+        use_batch_norm: False
+
+  t_theta_embedding_net:
+    - block_type: "PositionalEncoding"
+      kwargs:
+        n_freqs: 5
+        encode_theta: False
+    - block_type: "DenseResidualNet"
+      kwargs:
+        hidden_dims: [64, 32]
+        activation: "GELU"
+        output_dim: 32
+        dropout: 0.0
+        use_batch_norm: False
+
+  vectorfield_net:
+    network_type: "DenseResidualNet"
+    kwargs:
+      hidden_dims: [64, 32]
+      activation: "GELU"
+      dropout: 0.3
+      use_batch_norm: True
+
+# -----------------------------------------------------------------------------
+# TRAINING
+# No AddNoise transform: ABC spectra already include instrument noise.
+# -----------------------------------------------------------------------------
+
+training:
+
+  stage_0:
+    backup_interval: 5
+    batch_size: 1024
+    data_transforms: []      # ABC noise already baked in
+    early_stopping:
+      stage_patience: 50
+    epochs: 512
+    float32_matmul_precision: "high"
+    gradient_clipping:
+      enabled: True
+      max_norm: 1.0
+    logprob_evaluation:
+      interval: null
+      n_samples: 256
+      ode_solver:
+        method: "dopri5"
+        tolerance: 1.0e-3
+    optimizer:
+      type: "AdamW"
+      kwargs:
+        lr: 5.0e-4
+    scheduler:
+      type: "ReduceLROnPlateau"
+      kwargs:
+        factor: 0.5
+        patience: 10
+        min_lr: 5.0e-8
+    use_amp: False
+
+# -----------------------------------------------------------------------------
+# LOCAL
+# -----------------------------------------------------------------------------
+
+local:
+  device: "auto"
+  max_runtime: 86400
+  htcondor:
+    bid: 50
+    n_cpus: 8
+    n_gpus: 1
+    memory_cpus: 64000
+    gpu_type: "H100"
