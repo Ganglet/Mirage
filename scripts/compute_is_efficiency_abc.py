@@ -29,7 +29,7 @@ TRACEDATA = ABC_DIR / "Level2Data/Ground Truth Package/Tracedata.hdf5"
 
 DIM_THETA = 6
 DIM_X    = 52
-DIM_EMBED = 64
+DIM_EMBED = 256
 N_SAMPLES = 10_000
 
 
@@ -39,11 +39,12 @@ class NPEModel(nn.Module):
     def __init__(self) -> None:
         super().__init__()
         self.embedding = nn.Sequential(
-            nn.Linear(DIM_X, 128), nn.ELU(),
-            nn.Linear(128, 128), nn.ELU(),
-            nn.Linear(128, DIM_EMBED), nn.ELU(),
+            nn.Linear(DIM_X, 256), nn.ELU(),
+            nn.Linear(256, 256), nn.ELU(),
+            nn.Linear(256, 256), nn.ELU(),
+            nn.Linear(256, DIM_EMBED), nn.ELU(),
         )
-        self.npe = NPE(DIM_THETA, DIM_EMBED)
+        self.npe = NPE(DIM_THETA, DIM_EMBED, transforms=3)
 
     def flow(self, x: torch.Tensor):
         return self.npe.flow(self.embedding(x))

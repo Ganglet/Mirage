@@ -26,9 +26,8 @@ CKPT_DIR.mkdir(exist_ok=True)
 PARAM_NAMES = ["T", "log_H2O", "log_CO2", "log_CH4", "log_CO", "log_NH3"]
 DIM_THETA = 6
 DIM_X = 52
-DIM_EMBED = 64
+DIM_EMBED = 256
 
-# CPU smoke test defaults. Change for cluster.
 N_EPOCHS = 512
 BATCH_SIZE = 1024
 LR = 1e-3
@@ -53,11 +52,12 @@ class NPEModel(nn.Module):
     def __init__(self) -> None:
         super().__init__()
         self.embedding = nn.Sequential(
-            nn.Linear(DIM_X, 128), nn.ELU(),
-            nn.Linear(128, 128), nn.ELU(),
-            nn.Linear(128, DIM_EMBED), nn.ELU(),
+            nn.Linear(DIM_X, 256), nn.ELU(),
+            nn.Linear(256, 256), nn.ELU(),
+            nn.Linear(256, 256), nn.ELU(),
+            nn.Linear(256, DIM_EMBED), nn.ELU(),
         )
-        self.npe = NPE(DIM_THETA, DIM_EMBED)
+        self.npe = NPE(DIM_THETA, DIM_EMBED, transforms=3)
 
     def forward(self, theta: Tensor, x: Tensor) -> Tensor:
         return self.npe(theta, self.embedding(x))
@@ -67,7 +67,12 @@ class NPEModel(nn.Module):
 
 
 def main() -> None:
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    if torch.cuda.is_available():
+        device = torch.device("cuda")
+    elif torch.backends.mps.is_available():
+        device = torch.device("mps")
+    else:
+        device = torch.device("cpu")
     print(f"Device: {device}")
 
     train_ds = ABCDataset(ABC_DIR / "abc_train.hdf")
