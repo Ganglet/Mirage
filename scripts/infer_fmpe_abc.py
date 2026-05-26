@@ -34,7 +34,11 @@ N_SAMPLES = 10_000
 
 
 def main(planet_idx: int = 0) -> None:
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    # torchdiffeq ODE solver requires float64, which MPS doesn't support
+    if torch.cuda.is_available():
+        device = torch.device("cuda")
+    else:
+        device = torch.device("cpu")
     print(f"Device: {device}")
 
     # Load test spectrum
@@ -54,6 +58,7 @@ def main(planet_idx: int = 0) -> None:
     model = build_model(
         file_path=ckpt_path,
         experiment_dir=CKPT_DIR,
+        device="cpu",
     )
     model.network.eval()
 
@@ -127,7 +132,7 @@ def main(planet_idx: int = 0) -> None:
     fig.legend(handles=legend_items, loc="upper right", fontsize=9)
 
     fig.suptitle(
-        f"FMPE on ABC — Planet_{planet_id}\n(smoke-test checkpoint, not converged)",
+        f"FMPE on ABC — Planet_{planet_id}\n(M1 Pro, 512 epochs, output_dim=4096)",
         y=1.01, fontsize=10,
     )
 

@@ -1,4 +1,4 @@
-# Date: 2026-05-25T11:11:04.365472
+# Date: 2026-05-26T11:51:20.488384
 # Python version: 3.11.15 (main, Mar 11 2026, 17:14:47) [Clang 20.1.8 ]
 # Virtual environment: No virtual environment detected
 annotated-types==0.7.0
