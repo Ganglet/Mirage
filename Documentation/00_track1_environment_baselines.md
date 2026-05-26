@@ -2,7 +2,7 @@
 
 **Phase:** 0 — Environment Setup & Baseline Reproduction
 **Track:** 1 — Core Inference Architecture
-**Status:** In Progress
+**Status:** Complete (M1 Pro baseline done; FMPE cluster run optional for higher ε)
 **Weeks:** 1–2
 **Branch:** `phase-0-track-1`
 
@@ -93,7 +93,7 @@ python -m pip install -r requirements.txt
 | corner | 2.2.2 | Posterior corner plots |
 | tqdm | 4.66.4 | Progress bars |
 
-**GPU:** `torch.cuda.is_available() = False` — Mac CPU only. Training runs go on university HPC cluster. Phase 0 runs fine on CPU.
+**GPU:** `torch.cuda.is_available() = False`. MPS (Apple Silicon) enabled — `torch.backends.mps.is_available() = True` on M1 Pro. All training scripts and fm4ar's `resolve_device("auto")` patched to use MPS. **Exception:** `infer_fmpe_abc.py` forces CPU — `torchdiffeq`'s ODE solver casts to float64, which MPS does not support.
 
 ---
 
@@ -323,20 +323,21 @@ python scripts/train_npe_abc.py
 
 Both models trained to completion on Mac CPU. Timing was much faster than expected because the problem is small: 6 params × 52 bins vs Gebhard's 16 params × 379 bins.
 
-**NPE** — ~10 min on CPU (512 epochs × ~1.2s/epoch):
+**NPE** — ~15 min on M1 Pro MPS (512 epochs × ~1.7s/epoch):
 ```bash
 python scripts/train_npe_abc.py
 # Checkpoint: checkpoints/abc_npe_best.pt
 ```
-Loss: 16.7 → 15.1 over 512 epochs. Slowing by epoch ~230; model likely near its capacity limit for this architecture (2 MAF transforms, 64-dim embedding). Two gradient spikes recovered immediately (epoch 111: 89.4 → 16.2; epoch 186: 20257 → 15.8).
 
-**FMPE** (fm4ar training system) — longer due to larger context embedding (DenseResidualNet output_dim=4096):
+Architecture (final): MLP embedding 52 → 256 → 256 → 256 → 256, lampe NPE with 3 MAF transforms. Best valid loss: **14.59** (vs 15.34 with 64-dim/2-transform architecture — meaningful improvement). MPS enabled via `torch.backends.mps.is_available()` check; fm4ar's `resolve_device("auto")` also patched to include MPS.
+
+**FMPE** (fm4ar training system):
 ```bash
 python fm4ar/scripts/training/train_local.py --experiment-dir configs/fmpe_abc
 # Checkpoint: configs/fmpe_abc/model__best.pt
 ```
 
-**Why posteriors are still broad:** Not CPU speed — the NPE architecture (2 transforms, 64-dim context) is undersized for capturing tight posteriors. The Gebhard NPE used 10 residual blocks + 3 MAF transforms. Cluster training with a larger architecture would improve this; raw speed was not the bottleneck here.
+Architecture: DenseResidualNet context encoder (output_dim=4096), fm4ar CNF. Best val loss: **~1.388** at epoch 113; early stopping triggered at epoch 140 (patience=50, LR decayed from 5e-4 → ~1.95e-6 over 8+ reductions). ~2.7s/epoch on M1 Pro MPS.
 
 ### Step 11 — Inference scripts
 
@@ -360,12 +361,12 @@ context = {
 }
 ```
 
-**CPU training results — Planet_2020 (index 0 from abc_test.hdf):**
-- FMPE: posteriors physically sensible, broad, centred near training prior means. T posterior ~1200–1800 K range (true=1321 K). Expected for underconverged CPU run.
-- NPE: T posterior peak ~1538 K (true=1321 K), log abundances beginning to constrain. Broad vs ground-truth nested sampling.
+**Inference results — Planet_2020 (index 0 from abc_test.hdf, true T=1321 K):**
+- FMPE: T mode ~1464 K (close), log_CO2/CH4 within ~1–1.5 dex, log_CO/NH3 off by ~1.4 dex. FMPE posteriors tighter than NS reference — possible overconfidence or the NS posterior for this planet is poorly constrained.
+- NPE: T mode ~2609 K (overestimates), log abundances 1–3 dex off. FMPE outperforms NPE on this planet.
 - Output figures: `figures/abc_fmpe_planet2020.png`, `figures/abc_npe_planet2020.png`
 
-These are CPU smoke-test quality only. Cluster training is required for publishable posteriors and IS-efficiency numbers.
+Both models are M1 Pro quality only. Cluster training required for publishable posteriors and meaningful IS-efficiency comparison.
 
 ### Step 12 — Compute IS-efficiency on ABC
 
@@ -383,18 +384,16 @@ The Jacobian constant from normalising the KDE space cancels in the normalised w
 
 **Script:** `scripts/compute_is_efficiency_abc.py --n-planets N`
 
-**Phase 0 CPU result (20 test planets, N_SAMPLES=10,000):**
+**Phase 0 M1 Pro result (20 test planets, N_SAMPLES=10,000):**
 
-| Metric | Value |
-|---|---|
-| Valid test planets (pre-filtered) | 2,204 / 9,140 (24.1%) |
-| Planets evaluated | 20 |
-| Mean ESS | 1.6 |
-| Mean ε | 0.016% |
-| Median ε | 0.013% |
-| Gebhard NPE baseline (fully trained) | 11.6% |
+| Metric | Small arch (64-dim, 2 transforms) | Final arch (256-dim, 3 transforms) | Gebhard NPE (fully trained) |
+|---|---|---|---|
+| Best valid loss | 15.34 | 14.59 | — |
+| Mean ESS | 1.6 | 2.5 | ~121,856 |
+| Mean ε | 0.016% | 0.025% | 11.6% |
+| Median ε | 0.013% | 0.015% | — |
 
-ε = 0.016% is expected for an undertrained model — ~1–2 effective samples per 10k draws. The model has not learned the posterior shape. Cluster-trained checkpoint will close the gap.
+ε = 0.025% is expected — ~2–3 effective samples per 10k draws. Architecture scaling gave a 56% ε improvement. The remaining gap to 11.6% is a training scale problem (more data diversity, longer runs, potentially larger model). The model has not learned the posterior shape. Cluster-trained checkpoint will close the gap.
 
 **Data quality — Tracedata.hdf5 valid posterior count:**
 
@@ -423,11 +422,12 @@ Malformed (failed/empty NS runs)      : 69,404  (76%)
 - [x] Data loader adapter written — prepare_abc_hdf5.py + configs/fmpe_abc/config.yaml + train_npe_abc.py
 - [x] fm4ar smoke test on ABC — pipeline verified; theta normalisation bug found and fixed (MeanStdScaler + abc case in theta_scalers.py)
 - [x] sbi-ear smoke test on ABC — pipeline verified, loss converged ~16.7 in 5 epochs CPU
-- [x] Full 512-epoch CPU training — NPE ~10 min (6 params × 52 bins = small problem); FMPE longer due to larger context net
-- [x] fm4ar posteriors on ABC — `infer_fmpe_abc.py` run on Planet_2020; `figures/abc_fmpe_planet2020.png`
+- [x] Full 512-epoch MPS training — NPE ~15 min on M1 Pro (256-dim, 3 transforms, loss 14.59)
+- [x] FMPE full training on ABC — early stopping at epoch 140 (best val loss ~1.388 at epoch 113, M1 Pro MPS)
+- [x] fm4ar posteriors on ABC — `infer_fmpe_abc.py` verified (inverse scaler bug found and fixed); smoke-test figure only
 - [x] sbi-ear posteriors on ABC — `infer_npe_abc.py` run on Planet_2020; `figures/abc_npe_planet2020.png`
 - [ ] Cluster training — fm4ar FMPE + NPE on full 73k samples, 512 epochs, GPU (for publishable results)
-- [x] IS-efficiency on ABC (CPU baseline) — NPE ε = 0.016% (mean, 20 valid planets); expected for undertrained model; 76% of Tracedata.hdf5 has malformed NS posteriors (2,204 valid test planets)
-- [ ] All scripts and figures committed to `phase-0-track-1` branch
+- [x] IS-efficiency on ABC — NPE ε = 0.025% (mean, 20 valid planets, 256-dim/3-transform arch); 2,204 valid test planets (24.1% of test set)
+- [x] All scripts and figures committed to `phase-0-track-1` branch
 
 → See `01_track1_transformer_encoder.md` (to be written at Phase 1 start)
