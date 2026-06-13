@@ -47,3 +47,15 @@ Used by the ABC database.
 **PHOENIX Stellar Atmosphere Library**
 Husser et al. 2013
 Used for stellar contamination templates in the domain randomisation pipeline.
+
+---
+
+## Python Libraries (Phase 0 Track 2)
+
+**astropy** — Astronomy data structures and FITS I/O
+Harris et al. 2020, Nature 585, 357
+Used for loading JWST _x1dints.fits files and wavelength unit conversions
+
+**pandas** — Data manipulation and analysis
+McKinney 2010, Proceedings of the 9th Python in Science Conference
+Used for multi-instrument spectrum standardization and CSV export

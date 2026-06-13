@@ -57,9 +57,25 @@ Pre-development. Phase 0 commencing.
 
 | Phase | Weeks | Status |
 |-------|-------|--------|
-| 0 — Environment + baseline reproduction | 1–2 | In progress |
+| 0 — Environment + baseline reproduction | 1–2 | **Track 1 Complete ✓** / Track 2 In progress |
 | 1 — Transformer encoder + domain randomisation | 3–5 | Not started |
 | 2 — Noise conditioning + corpus expansion | 6–8 | Not started |
 | 3 — OT calibration + first real-data result | 9–10 | Not started |
 | 4 — Full validation + stress test | 11–13 | Not started |
 | 5 — Manuscript + submission | 14–16 | Not started |
+
+### Phase 0 Details
+
+**Track 1 — Baseline Reproduction (Complete)**
+- fm4ar (FMPE) and sbi-ear (NPE) baselines reproduced on ABC synthetic dataset
+- IS-efficiency verification: FMPE ε=19.05% (paper: 19.1%), NPE ε=11.62% (paper: 11.6%)
+- Environment validated on M1 Pro MPS
+- Documentation: `Documentation/00_track1_environment_baselines.md`
+- Branch: `phase-0-track-1`
+
+**Track 2 — JWST Data Preparation (In progress)**
+- WASP-39b observations retrieved from MAST (4 instruments: NIRSpec PRISM/G395H, NIRISS SOSS, NIRCam F322W2)
+- Multi-instrument spectrum standardization and quality filtering
+- Unified dataset creation for Phase 3 real-data validation
+- Notebook: `MIRAGE_PHASE-0.ipynb`
+- Branch: `phase-0-track-2`
