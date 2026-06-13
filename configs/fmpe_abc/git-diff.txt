@@ -1,0 +1,37 @@
+diff --git a/fm4ar/datasets/theta_scalers.py b/fm4ar/datasets/theta_scalers.py
+index 40ce2d4..0405f89 100644
+--- a/fm4ar/datasets/theta_scalers.py
++++ b/fm4ar/datasets/theta_scalers.py
+@@ -158,6 +158,12 @@ def get_mean_and_std(dataset: str) -> tuple[np.ndarray, np.ndarray]:
+         mean = (a + b) / 2
+         std = np.sqrt(1 / 12 * (b - a) ** 2)
+ 
++    elif dataset == "abc":
++        # Computed from abc_train.hdf (73,113 planets, Level2Data)
++        # Parameters: [T, log_H2O, log_CO2, log_CH4, log_CO, log_NH3]
++        mean = np.array([1201.1842, -5.9989, -6.5019, -5.9979, -4.4954, -6.4910])
++        std  = np.array([ 681.0441,  1.7337,  1.4457,  1.7390,  0.8639,  1.4373])
++
+     else:
+         raise ValueError(f"Unknown dataset: {dataset}")
+ 
+diff --git a/fm4ar/torchutils/general.py b/fm4ar/torchutils/general.py
+index 737fff0..d71ead2 100644
+--- a/fm4ar/torchutils/general.py
++++ b/fm4ar/torchutils/general.py
+@@ -95,9 +95,13 @@ def resolve_device(device: str) -> torch.device:
+     Resolve the device string to a `torch.device` object.
+     """
+ 
+-    # "auto" means "cuda" if available, otherwise "cpu"
++    # "auto" means "cuda" if available, then "mps" (Apple Silicon), else "cpu"
+     if device == "auto":
+-        return torch.device("cuda" if torch.cuda.is_available() else "cpu")
++        if torch.cuda.is_available():
++            return torch.device("cuda")
++        if torch.backends.mps.is_available():
++            return torch.device("mps")
++        return torch.device("cpu")
+ 
+     # Otherwise, just return the device as specified
+     return torch.device(device)

@@ -78,4 +78,4 @@ Pre-development. Phase 0 commencing.
 - Multi-instrument spectrum standardization and quality filtering
 - Unified dataset creation for Phase 3 real-data validation
 - Notebook: `MIRAGE_PHASE-0.ipynb`
-- Branch: `vedanth`
+- Branch: `phase-0-track-2`
