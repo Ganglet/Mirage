@@ -45,13 +45,22 @@ JWST FITS files are 500 MB–2 GB each; total WASP-39b corpus is 30–50 GB. Git
 
 ## Phase 0 Log
 
-*(Empty — Phase 0 not yet started)*
+See `00_track1_environment_baselines.md` for full Phase 0 Track 1 record.
+
+Key outcomes: ABC pipeline verified end-to-end; NPE ε = 0.025% (M1 Pro, 256-dim/3-transform); FMPE trained to early stopping epoch 140 (val loss 1.388); 76% of ABC NS posteriors malformed — 2,204 valid test planets.
 
 ---
 
 ## Phase 1 Log
 
-*(Empty)*
+### P1-D1 — sample_and_log_prob_batch called on model wrapper, not network [Phase 1]
+`FMPEModel.sample_and_log_prob_batch` exists on the wrapper class; `FMPEModel.network` (type `FMPENetwork`) does not have this method. Calling `model.network.sample_and_log_prob_batch` raises `AttributeError`. Fix: call `model.sample_and_log_prob_batch` directly.
+
+### P1-D2 — N_SAMPLES=2,000 for FMPE IS-efficiency (vs 10,000 for NPE) [Phase 1]
+Each FMPE IS-efficiency evaluation requires a full ODE solve (dopri5) on CPU — ~30–60s per planet. Using 10,000 samples per planet would take 5–10× longer. Decision: 2,000 samples per planet for M1 Pro diagnostics. ε is ESS/N so the comparison with NPE (N=10,000) is valid on expectation; variance is higher. Cluster evaluation should use N=10,000 for publication-quality numbers.
+
+### P1-D3 — ODE tolerance set to 1e-3 for IS-efficiency speed [Phase 1]
+Default tolerance 1e-7 is too slow for 20-planet evaluation on CPU. Decision: 1e-3 for diagnostic runs. Tighten to 1e-5 or 1e-7 for publication-quality IS-efficiency numbers on cluster.
 
 ---
 
