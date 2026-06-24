@@ -1,0 +1,3 @@
+target,instrument,mode,archive,program_hint,product_level,status,notes
+WASP-96b,NIRISS,SOSS,MAST,JWST transiting exoplanet spectroscopy,extracted 1D spectrum,planned,"Phase 2 Track 2 corpus expansion target; retrieve public NIRISS/SOSS spectra and standardize into MIRAGE wavelength/flux/error schema."
+HD 209458b,NIRCam,grism,MAST,JWST transiting exoplanet spectroscopy,extracted 1D spectrum,planned,"Phase 2 Track 2 corpus expansion target; retrieve public NIRCam grism spectra and standardize into MIRAGE wavelength/flux/error schema."

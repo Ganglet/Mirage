@@ -59,7 +59,7 @@ Pre-development. Phase 0 commencing.
 |-------|-------|--------|
 | 0 — Environment + baseline reproduction | 1–2 | **Track 1 Complete ✓** / Track 2 In progress |
 | 1 — Transformer encoder + domain randomisation | 3–5 | Not started |
-| 2 — Noise conditioning + corpus expansion | 6–8 | Not started |
+| 2 — Noise conditioning + corpus expansion | 6–8 | Track 1 in progress / **Track 2 scaffold complete** |
 | 3 — OT calibration + first real-data result | 9–10 | Not started |
 | 4 — Full validation + stress test | 11–13 | Not started |
 | 5 — Manuscript + submission | 14–16 | Not started |
@@ -79,3 +79,11 @@ Pre-development. Phase 0 commencing.
 - Unified dataset creation for Phase 3 real-data validation
 - Notebook: `MIRAGE_PHASE-0.ipynb`
 - Branch: `phase-0-track-2`
+
+### Phase 2 Track 2 Details
+
+**Track 2 — Observational Corpus Expansion + Diagnostics (Scaffold Complete)**
+- Registered expansion targets: WASP-96b NIRISS/SOSS and HD 209458b NIRCam grism
+- Added posterior diagnostics for IS-efficiency, 68%/95% coverage, corner plots, and deep-ensemble KL summaries
+- Documentation: `Documentation/02_track2_observational_corpus_and_diagnostics.md`
+- Branch: `phase-2-track-2`
