@@ -14,6 +14,22 @@ Used as the NPE baseline for synthetic benchmark comparison.
 
 ---
 
+## Methods reimplemented (no source code used)
+
+**SpectraFM** — Transformer foundation model for stellar spectra
+Koblischke & Bovy 2024, NeurIPS Workshop on Foundation Models for Science (arXiv:2411.04750)
+`github.com/NolanKoblischke/SpectraFM_NeurIPS_FM4Science`
+MIRAGE's `SpectraEncoder` independently reimplements, in PyTorch, the per-bin
+tokenisation and wavelength positional encoding (their Eq. 2). No SpectraFM
+source code is used.
+
+**DINGO** — Neural posterior estimation with noise conditioning for gravitational waves
+Dax et al. 2021, Phys. Rev. Lett. 127, 241103
+MIRAGE's residual-covariance embedding ports DINGO's power-spectral-density
+noise conditioning to JWST transmission spectroscopy (method only; no code used).
+
+---
+
 ## Datasets
 
 **ABC Database** — Atmospheric retrieval benchmark corpus
