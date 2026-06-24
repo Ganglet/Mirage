@@ -107,7 +107,7 @@ training:
 # -----------------------------------------------------------------------------
 
 local:
-  device: "auto"
+  device: "mps"   # Apple Silicon; pristine fm4ar's "auto" = cuda|cpu only
   max_runtime: 86400
   htcondor:
     bid: 50
