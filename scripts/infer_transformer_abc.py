@@ -17,6 +17,7 @@ import corner
 import matplotlib.pyplot as plt
 from pathlib import Path
 
+import mirage  # noqa: F401 — registers SpectraEncoder block into fm4ar
 from fm4ar.models.build_model import build_model
 from fm4ar.datasets.theta_scalers import get_theta_scaler
 

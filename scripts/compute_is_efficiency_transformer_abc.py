@@ -20,6 +20,8 @@ import numpy as np
 import torch
 import yaml
 from pathlib import Path
+
+import mirage  # noqa: F401 — registers SpectraEncoder block into fm4ar
 from scipy.stats import gaussian_kde
 from tqdm import tqdm
 
