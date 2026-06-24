@@ -9,3 +9,9 @@ astroquery>=0.4.7
 wandb>=0.16.0
 corner>=2.2.2
 tqdm>=4.66.0
+
+# fm4ar backbone — pristine upstream. MIRAGE adds its components via the
+# `mirage` package (register.py), so no fork is needed. For local dev it is
+# installed editable from ./fm4ar; this pin reproduces the exact upstream
+# commit MIRAGE was developed against.
+fm4ar @ git+https://github.com/timothygebhard/fm4ar@c05841c02e80dfad632122caa99af00d9b548342
