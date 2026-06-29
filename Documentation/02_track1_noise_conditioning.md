@@ -111,11 +111,13 @@ WI-2 (generator) → WI-1 (σ wiring) ∥ WI-3 (embedding) → WI-4 (ESS module)
 
 ## Completion checklist
 
-- [x] `CorrelatedNoiseGenerator` + OOT-frame draw — `fm4ar/datasets/noise.py` (verified: PD Σ, flat diag=σ², OOT frames recover Σ to 3.9% at 20k frames)
-- [x] Injection transform emitting `error_bars` + `oot_frames` — `fm4ar/datasets/data_transforms.py` (verified: shared-Σ consistency, error_bars == OOT per-bin std to 0.7%, input not mutated, registration + guard)
-- [x] σ token feature wired into `SpectraEncoder` (verified: `use_error_bars` flag, backward-compatible when off, σ consumed when on, +d_model params, registry path)
-- [x] `covariance_embedding.py` written + concatenated into flow context (verified: flatten + eigen, Σ̂ matches np.cov, dim bump 256→320 inferred at build time, end-to-end with injection transform)
-- [ ] ESS module with D7 thresholds — reusable by Phase 3
+> Note: per the P2-D8 refactor, all WI code lives in the `mirage/` package (not `fm4ar/`); paths below are updated accordingly.
+
+- [x] `CorrelatedNoiseGenerator` + OOT-frame draw — `mirage/datasets/noise.py` (verified: PD Σ, flat diag=σ², OOT frames recover Σ to 3.9% at 20k frames)
+- [x] Injection transform emitting `error_bars` + `oot_frames` — `mirage/datasets/transforms.py` (verified: shared-Σ consistency, error_bars == OOT per-bin std to 0.7%, input not mutated, registration + guard)
+- [x] σ token feature wired into `SpectraEncoder` — `mirage/nn/spectra_encoder.py` (verified: `use_error_bars` flag, backward-compatible when off, σ consumed when on, +d_model params, registry path)
+- [x] `covariance_embedding.py` written + concatenated into flow context — `mirage/nn/covariance_embedding.py` (verified: flatten + eigen, Σ̂ matches np.cov, dim bump 256→320 inferred at build time, end-to-end with injection transform)
+- [x] ESS module with D7 thresholds — `mirage/eval/ess.py`, consumed by `scripts/compute_is_efficiency_transformer_abc.py` (verified: regression-identical to old inline formula on 1000 vectors, threshold boundaries, aggregate; reusable by Phase 3)
 - [ ] New config `configs/transformer_abc_noisecond/config.yaml`
 - [ ] Benchmark table: 6 rows, ESS on held-out ABC
 - [ ] Recover-Σ sanity check: embedding vs known kernel length scale
