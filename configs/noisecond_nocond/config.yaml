@@ -1,0 +1,120 @@
+# Phase 2 noise-conditioning ablation — ARM 1/3: NO conditioning (baseline)
+# Transformer-FMPE trained on injected correlated noise, but the encoder does
+# NOT see the noise (use_error_bars=False, use_covariance=False). This is the
+# overconfident arm the ablation is meant to expose.
+#
+# All three arms (noisecond_nocond / _sigma / _cov) share identical noise
+# injection — only the encoder's access to the noise differs.
+#
+# NOTE (σ calibration, P2-D9 amendment): first run at σ=0.001–0.005 gave
+# prior-width posteriors (width68≈2.36 ⇒ signal destroyed). Lowered to ~0.5–5×
+# the real instrument noise (~4e-5). PROVISIONAL — confirm against the clean
+# Phase-1 reference width (`run_noisecond_ablation.py --clean-ref`) before the
+# full retrain: injected no-cond should sit BETWEEN the clean width and ~2.36.
+
+dataset:
+  file_path: "data/abc/abc_train.hdf"   # cleaned + per-bin normalised (prepare_abc_hdf5.py)
+  n_train_samples: 64000
+  n_valid_samples: 8000
+  random_seed: 42
+
+theta_scaler:
+  method: "MeanStdScaler"
+  kwargs:
+    dataset: "abc"
+
+model:
+  model_type: "fmpe"
+  random_seed: 42
+  t_theta_with_glu: True
+  context_with_glu: False
+  sigma_min: 0.0001
+  time_prior_exponent: 2.0
+
+  context_embedding_net:
+    - block_type: "SoftClipFlux"     # tame residual standardised outliers (Vasist 2023)
+      kwargs:
+        bound: 15.0
+    - block_type: "SpectraEncoder"
+      kwargs:
+        d_model: 128
+        nhead: 4
+        num_layers: 4
+        dim_feedforward: 512
+        dropout: 0.1
+        output_dim: 256
+        wlen_min: 0.55
+        wlen_max: 7.30
+        n_instruments: 4
+        # no conditioning: encoder ignores error_bars / oot_frames
+
+  t_theta_embedding_net:
+    - block_type: "PositionalEncoding"
+      kwargs:
+        n_freqs: 5
+        encode_theta: False
+    - block_type: "DenseResidualNet"
+      kwargs:
+        hidden_dims: [64, 32]
+        activation: "GELU"
+        output_dim: 32
+        dropout: 0.0
+        use_batch_norm: False
+
+  vectorfield_net:
+    network_type: "DenseResidualNet"
+    kwargs:
+      hidden_dims: [64, 32]
+      activation: "GELU"
+      dropout: 0.3
+      use_batch_norm: True
+
+training:
+
+  stage_0:
+    backup_interval: 5
+    batch_size: 512
+    data_transforms:
+      - type: "InjectCorrelatedNoise"
+        kwargs:
+          n_oot_frames: 0     # no-cond uses no OOT frames (avoids MPS instability)
+          config:
+            type: "CorrelatedNoiseGenerator"
+            kwargs:
+              sigma_min: 0.05   # reported ablation regime (P2-D11): clearest conditioning gap
+              sigma_max: 0.3    # stronger noise → larger logdens gap; lowering σ shrank it (0.02–0.12 → 0.22 nats)
+              random_seed: 42
+    early_stopping:
+      stage_patience: 50
+    epochs: 512
+    float32_matmul_precision: "high"
+    gradient_clipping:
+      enabled: True
+      max_norm: 1.0
+    logprob_evaluation:
+      interval: null
+      n_samples: 256
+      ode_solver:
+        method: "dopri5"
+        tolerance: 1.0e-3
+    optimizer:
+      type: "AdamW"
+      kwargs:
+        lr: 3.0e-4
+    scheduler:
+      type: "ReduceLROnPlateau"
+      kwargs:
+        factor: 0.5
+        patience: 10
+        min_lr: 5.0e-8
+    use_amp: False
+
+local:
+  device: "mps"
+  max_runtime: 86400
+  htcondor:
+    bid: 50
+    n_cpus: 8
+    n_gpus: 1
+    memory_cpus: 64000
+    gpu_type: "H100"

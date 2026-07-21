@@ -20,25 +20,21 @@ import numpy as np
 import torch
 import yaml
 from pathlib import Path
+
+import mirage  # noqa: F401 — registers SpectraEncoder block into fm4ar
 from scipy.stats import gaussian_kde
 from tqdm import tqdm
 
 from fm4ar.models.build_model import build_model
 from fm4ar.datasets.theta_scalers import get_theta_scaler
 
+from mirage.eval.ess import ESS_DEPLOY, ESSResult, aggregate, is_efficiency
+
 ABC_DIR  = Path("data/abc")
 TRACEDATA = ABC_DIR / "Level2Data/Ground Truth Package/Tracedata.hdf5"
 CKPT_DIR = Path("configs/transformer_abc")
 
 N_SAMPLES = 2_000   # per planet — ODE solve limits throughput on CPU
-
-
-def compute_ess(log_w: np.ndarray) -> tuple[float, float]:
-    log_w = log_w - log_w.max()
-    w = np.exp(log_w)
-    w /= w.sum()
-    ess = float(1.0 / (w ** 2).sum())
-    return ess, ess / len(log_w)
 
 
 def planet_efficiency(
@@ -48,7 +44,7 @@ def planet_efficiency(
     wlen: torch.Tensor,
     ns_samples: np.ndarray,
     ns_weights: np.ndarray,
-) -> tuple[float, float] | None:
+) -> ESSResult | None:
     ns_w = ns_weights / ns_weights.sum()
 
     # Normalise NS samples for KDE numerical stability
@@ -85,7 +81,7 @@ def planet_efficiency(
     log_w = log_p_ns - log_q_np
     log_w = np.clip(log_w, log_w.max() - 50, np.inf)
 
-    return compute_ess(log_w)
+    return is_efficiency(log_w)
 
 
 def main(n_planets: int = 20) -> None:
@@ -104,8 +100,7 @@ def main(n_planets: int = 20) -> None:
         config = yaml.safe_load(fh)
     theta_scaler = get_theta_scaler(config.get("theta_scaler", {}))
 
-    ess_list: list[float] = []
-    eps_list: list[float] = []
+    results: list[ESSResult] = []
 
     with h5py.File(ABC_DIR / "abc_test.hdf", "r") as f, \
          h5py.File(TRACEDATA, "r") as gt:
@@ -146,23 +141,27 @@ def main(n_planets: int = 20) -> None:
             if result is None:
                 continue
 
-            ess, eps = result
-            ess_list.append(ess)
-            eps_list.append(eps)
-            tqdm.write(f"  Planet_{planet_id:>6d}: ESS={ess:>7.1f}  ε={eps*100:.3f}%")
+            results.append(result)
+            tqdm.write(
+                f"  Planet_{planet_id:>6d}: ESS={result.ess:>7.1f}  "
+                f"ε={result.epsilon*100:.3f}%  [{result.quality}]"
+            )
 
-    if not eps_list:
+    if not results:
         print("No valid results.")
         return
 
+    summary = aggregate(results)
+    eps = [r.epsilon for r in results]
     print(f"\n{'─'*50}")
     print(f"  Model             : Transformer-FMPE (Phase 1)")
-    print(f"  Planets evaluated : {len(eps_list)}")
+    print(f"  Planets evaluated : {summary.n}")
     print(f"  N_SAMPLES/planet  : {N_SAMPLES}")
-    print(f"  Mean ESS          : {np.mean(ess_list):.1f}")
-    print(f"  Mean ε            : {np.mean(eps_list)*100:.3f}%")
-    print(f"  Median ε          : {np.median(eps_list)*100:.3f}%")
-    print(f"  Min / Max ε       : {np.min(eps_list)*100:.3f}% / {np.max(eps_list)*100:.3f}%")
+    print(f"  Mean ESS          : {summary.mean_ess:.1f}")
+    print(f"  Mean ε            : {summary.mean_epsilon*100:.3f}%")
+    print(f"  Median ε          : {summary.median_epsilon*100:.3f}%")
+    print(f"  Min / Max ε       : {min(eps)*100:.3f}% / {max(eps)*100:.3f}%")
+    print(f"  Deployable (ESS≥{ESS_DEPLOY}): {summary.frac_deployable*100:.0f}%")
     print(f"{'─'*50}")
     print(f"  Phase 0 NPE baseline (N=10k):  mean ε = 0.025%")
     print(f"  Any improvement validates transformer context encoding.")

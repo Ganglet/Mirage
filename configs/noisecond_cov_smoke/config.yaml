@@ -1,0 +1,112 @@
+# SMOKE TEST of the +σ+cov arm — tiny + fast, just to prove the full training
+# pipeline runs end-to-end (InjectCorrelatedNoise in the real DataLoader,
+# oot_frames collation, covariance branch, checkpoint save). NOT for results.
+#   python scripts/train.py --experiment-dir configs/noisecond_cov_smoke
+
+dataset:
+  file_path: "data/abc/abc_train.hdf"
+  n_train_samples: 1000
+  n_valid_samples: 200
+  random_seed: 42
+
+theta_scaler:
+  method: "MeanStdScaler"
+  kwargs:
+    dataset: "abc"
+
+model:
+  model_type: "fmpe"
+  random_seed: 42
+  t_theta_with_glu: True
+  context_with_glu: False
+  sigma_min: 0.0001
+  time_prior_exponent: 2.0
+
+  context_embedding_net:
+    - block_type: "SpectraEncoder"
+      kwargs:
+        d_model: 128
+        nhead: 4
+        num_layers: 4
+        dim_feedforward: 512
+        dropout: 0.1
+        output_dim: 256
+        wlen_min: 0.55
+        wlen_max: 7.30
+        n_instruments: 4
+        use_error_bars: True
+        use_covariance: True
+        n_bins: 52
+        cov_embed_dim: 64
+        cov_method: "flatten"
+
+  t_theta_embedding_net:
+    - block_type: "PositionalEncoding"
+      kwargs:
+        n_freqs: 5
+        encode_theta: False
+    - block_type: "DenseResidualNet"
+      kwargs:
+        hidden_dims: [64, 32]
+        activation: "GELU"
+        output_dim: 32
+        dropout: 0.0
+        use_batch_norm: False
+
+  vectorfield_net:
+    network_type: "DenseResidualNet"
+    kwargs:
+      hidden_dims: [64, 32]
+      activation: "GELU"
+      dropout: 0.3
+      use_batch_norm: True
+
+training:
+
+  stage_0:
+    backup_interval: 1
+    batch_size: 128
+    data_transforms:
+      - type: "InjectCorrelatedNoise"
+        kwargs:
+          n_oot_frames: 100
+          config:
+            type: "CorrelatedNoiseGenerator"
+            kwargs:
+              sigma_min: 0.00002
+              sigma_max: 0.0002
+              random_seed: 42
+    early_stopping:
+      stage_patience: 50
+    epochs: 2
+    float32_matmul_precision: "high"
+    gradient_clipping:
+      enabled: True
+      max_norm: 1.0
+    logprob_evaluation:
+      interval: null
+      n_samples: 256
+      ode_solver:
+        method: "dopri5"
+        tolerance: 1.0e-3
+    optimizer:
+      type: "AdamW"
+      kwargs:
+        lr: 3.0e-4
+    scheduler:
+      type: "ReduceLROnPlateau"
+      kwargs:
+        factor: 0.5
+        patience: 10
+        min_lr: 5.0e-8
+    use_amp: False
+
+local:
+  device: "mps"
+  max_runtime: 86400
+  htcondor:
+    bid: 50
+    n_cpus: 8
+    n_gpus: 1
+    memory_cpus: 64000
+    gpu_type: "H100"

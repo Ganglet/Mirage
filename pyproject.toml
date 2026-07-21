@@ -1,0 +1,12 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mirage"
+version = "0.1.0"
+description = "MIRAGE — sim-to-real domain-adaptive JWST atmospheric retrieval (Track 1)"
+requires-python = ">=3.11"
+
+[tool.setuptools.packages.find]
+include = ["mirage*"]
