@@ -62,8 +62,13 @@ class InjectCorrelatedNoise(DataTransform):
         noise = self.noise_generator.sample_noise_from_covariance(sigma_mat)
         output["flux"] = x["flux"] + noise  # new array — do not mutate input
         output["error_bars"] = np.sqrt(np.diag(sigma_mat)).astype(np.float32)
-        output["oot_frames"] = self.noise_generator.sample_oot_frames(
-            sigma_mat, n_frames=self.n_oot_frames
-        )
+
+        # OOT frames only for arms that use them (WI-3 covariance embedding).
+        # Set n_oot_frames=0 for the no-cond / +σ arms so this heavy (K, n_bins)
+        # tensor is not produced/moved to the GPU — it destabilises MPS.
+        if self.n_oot_frames > 0:
+            output["oot_frames"] = self.noise_generator.sample_oot_frames(
+                sigma_mat, n_frames=self.n_oot_frames
+            )
 
         return output
