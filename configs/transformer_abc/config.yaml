@@ -7,9 +7,9 @@
 # -----------------------------------------------------------------------------
 
 dataset:
-  file_path: "data/abc/abc_train.hdf"
-  n_train_samples: 65000
-  n_valid_samples: 8113
+  file_path: "data/abc/abc_train.hdf"   # cleaned + per-bin normalised (prepare_abc_hdf5.py)
+  n_train_samples: 64000
+  n_valid_samples: 8000
   random_seed: 42
 
 theta_scaler:
@@ -32,6 +32,9 @@ model:
   time_prior_exponent: 2.0
 
   context_embedding_net:
+    - block_type: "SoftClipFlux"     # tame residual standardised outliers (Vasist 2023)
+      kwargs:
+        bound: 15.0
     - block_type: "SpectraEncoder"
       kwargs:
         d_model: 128
