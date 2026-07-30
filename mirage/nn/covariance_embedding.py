@@ -36,6 +36,7 @@ class CovarianceEmbedding(nn.Module):
         method: str = "flatten",
         n_eigen: int = 8,
         hidden_dims: tuple[int, ...] = (128, 64),
+        whiten: bool = False,
     ) -> None:
         super().__init__()
 
@@ -46,6 +47,13 @@ class CovarianceEmbedding(nn.Module):
         self.method = method
         self.n_eigen = min(n_eigen, n_bins)
         self.embed_dim = embed_dim
+        # whiten=True (P3-D1): standardise each bin across the K frames before
+        # forming Σ̂, so it becomes the CORRELATION matrix (diag≈1). The
+        # embedding then conditions on noise *structure*, not amplitude — scale
+        # is carried separately by the per-λ σ vector (WI-1). This makes the
+        # conditioning invariant to per-dataset noise scale, so a real visit
+        # ~10× quieter (or louder) than the training σ regime stays in-distribution.
+        self.whiten = whiten
 
         if method == "flatten":
             # Upper triangle incl. diagonal — the unique entries of symmetric Σ̂
@@ -88,5 +96,8 @@ class CovarianceEmbedding(nn.Module):
             (B, embed_dim) covariance embedding.
         """
 
+        if self.whiten:
+            std = oot_frames.std(dim=1, keepdim=True).clamp_min(1e-8)
+            oot_frames = (oot_frames - oot_frames.mean(dim=1, keepdim=True)) / std
         sigma_hat = self.empirical_cov(oot_frames)
         return self.mlp(self._featurise(sigma_hat))

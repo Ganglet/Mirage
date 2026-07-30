@@ -57,6 +57,7 @@ class SpectraEncoder(SupportsDictInput, nn.Module):
         cov_method: str = "flatten",
         cov_n_eigen: int = 8,
         cov_hidden_dims: tuple[int, ...] = (128, 64),
+        cov_whiten: bool = False,      # P3-D1: condition on structure, not scale
     ) -> None:
         super().__init__()
 
@@ -112,6 +113,7 @@ class SpectraEncoder(SupportsDictInput, nn.Module):
                 method=cov_method,
                 n_eigen=cov_n_eigen,
                 hidden_dims=cov_hidden_dims,
+                whiten=cov_whiten,
             )
 
     def _wavelength_pe(self, wlen: torch.Tensor) -> torch.Tensor:
