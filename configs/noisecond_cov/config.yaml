@@ -44,6 +44,9 @@ model:
         n_bins: 52
         cov_embed_dim: 64
         cov_method: "flatten"  # ABC P=52; switch to "eigen" (CPU/CUDA) for JWST scale
+        cov_whiten: True       # P3-D1: condition on correlation STRUCTURE, not scale
+                               # (per-λ σ carries amplitude) → real visits ~10× the
+                               # training σ stay in-distribution. Requires retrain.
 
   t_theta_embedding_net:
     - block_type: "PositionalEncoding"
