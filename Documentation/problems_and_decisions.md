@@ -116,7 +116,25 @@ Final ablation on the normalised base (clean-ref width68 = 0.68, logdens@truth =
 
 ## Phase 3 Log
 
-*(Empty)*
+### P3-D1 — Covariance embedding conditions on whitened correlation STRUCTURE, not amplitude [Phase 3]
+First Phase-3 step (real WASP-39b OOT frames, `WASP39b_out_of_transit_data/`) built the real noise covariance on the model's 52-bin grid (`scripts/build_real_covariance.py`). Two findings:
+1. **Coverage:** PRISM (0.60–5.29 µm, 3241 frames) covers 47/52 model bins; the top 5 bins (5.3–7.28 µm) have NO real data and must be masked. NIRISS/NIRCam/G395H have only 55–93 frames each — too few for a full covariance at native resolution; rebinning to ~52 bins is what makes Σ̂ estimable at all.
+2. **Scale mismatch:** real PRISM frame-to-frame relative noise is median **0.5%** (0.003–0.16 across bins) — roughly **10× BELOW** the Phase-2 training regime σ=0.05–0.30. Fed raw, the real Σ̂ is out-of-distribution for the embedding (which was trained on `flatten` of the *covariance*, a scale-sensitive feature). Real off-diagonal structure IS present (nearest-neighbour correlation median +0.24, up to +0.74), so the phenomenon the method targets exists in real data.
+
+**The cross-examination this invites:** "10× quieter is specific to THIS dataset; another target/instrument/epoch could be far louder and break the method." Correct — *for a scale-sensitive embedding.*
+
+**Decision:** condition on the **whitened correlation matrix** (per-bin standardise each frame across the K frames before forming Σ̂ → diag≈1), so the embedding sees noise *structure* only; amplitude is carried separately by the per-λ σ vector (WI-1). Consequences:
+- **Scale-invariant by construction:** a visit 10× quieter or louder produces the *same* conditioning vector — the dataset-specific critique is answered at the architecture level, not per-dataset.
+- The residual, honest generalisation axis is **structure** (correlation length, 1/f slope), defended by the D4 domain randomisation (SE length ∈ [0.10,1.00] µm, OU length ∈ [0.50,3.00] µm, ρ ∈ [0.3,0.8]) and made *falsifiable* by an envelope check: does each real instrument's correlation structure fall inside the trained kernel envelope? Testable now across all 4 instruments (n=4, not n=1) → WASP-96b later makes n=5.
+- Implemented as `CovarianceEmbedding(whiten=True)` + `SpectraEncoder(cov_whiten=True)` + `cov_whiten: True` in `configs/noisecond_cov`. Backward-compatible (default False, so Phase-2 arms/checkpoints unaffected). **Requires retraining the cov arm** with whitening on before the real Σ is in-distribution — gated on the envelope check passing.
+
+Rejected alternative — retrain the arm at real-matched σ (~0.005–0.05) instead of whitening: still scale-*specific* (ties the model to WASP-39b PRISM's amplitude), so it fails the exact cross-examination above. Whitening removes the dependence entirely; the σ-vector already carries what amplitude the flow needs.
+
+Validation harness: `scripts/validate_whitening.py` (envelope check across 4 instruments + direct scale-invariance demo).
+
+**Validation outcome (2026-07-23):**
+- **(A) Scale-invariance — PASS, clean.** Real PRISM frames vs a ×10 copy through `CovarianceEmbedding(whiten=True)`: relative drift 1.1e-7 (invariant); `whiten=False`: 5.8e-2 (scale-dependent). The design goal is met — conditioning is provably independent of noise amplitude, so the "10× quieter is dataset-specific" critique is answered architecturally.
+- **(B) Envelope — real correlation is present but SHORT-range at 52 bins.** nn-corr: NIRISS +0.61, PRISM +0.24, NIRCam +0.26, G395H +0.03. Only NIRISS resolves a 1/e length (0.12 µm) — and it sits at the **low edge** of the training envelope [0.12, 1.13] µm (median 0.50). The other three decay within one bin (sub-resolution) — partly real, partly the 409→47 rebinning averaging out fine structure. **Two implications:** (i) the D4 kernel envelope's short-length edge (se_min 0.10, ou_min 0.50 µm) should extend **downward** so real JWST structure is comfortably *inside*, not on the boundary; (ii) correlation length should be measured on a finer grid (native, or rebin the *covariance* not the frames) before concluding it is near-white — aggressive frame rebinning decorrelates. Whitening itself is validated regardless; these refine the *training distribution*, gated before the cov-arm retrain.
 
 ---
 
