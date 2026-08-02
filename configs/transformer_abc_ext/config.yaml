@@ -1,0 +1,118 @@
+# FMPE on ABC — Phase 1 Transformer Encoder
+# Context encoder: SpectraEncoder (transformer, 52 tokens) instead of DenseResidualNet.
+# Comparison against Phase 0 baseline (configs/fmpe_abc) measures transformer gain.
+
+# -----------------------------------------------------------------------------
+# DATASET
+# -----------------------------------------------------------------------------
+
+dataset:
+  file_path: "data/abc_ext/abc_ext_train.hdf"   # cleaned + per-bin normalised (prepare_abc_hdf5.py)
+  n_train_samples: 23040
+  n_valid_samples: 2560
+  random_seed: 42
+
+theta_scaler:
+  method: "MeanStdScaler"
+  kwargs:
+    dataset: "abc"
+
+# -----------------------------------------------------------------------------
+# MODEL
+# SpectraEncoder: 52 tokens × (flux, inst_emb) → transformer → mean-pool → 256
+# d_model=128, 4 heads, 4 layers — ~1.4M params in the encoder alone.
+# -----------------------------------------------------------------------------
+
+model:
+  model_type: "fmpe"
+  random_seed: 42
+  t_theta_with_glu: True
+  context_with_glu: False
+  sigma_min: 0.0001
+  time_prior_exponent: 2.0
+
+  context_embedding_net:
+    - block_type: "SoftClipFlux"     # tame residual standardised outliers (Vasist 2023)
+      kwargs:
+        bound: 15.0
+    - block_type: "SpectraEncoder"
+      kwargs:
+        d_model: 128
+        nhead: 4
+        num_layers: 4
+        dim_feedforward: 512
+        dropout: 0.1
+        output_dim: 256
+        wlen_min: 0.55
+        wlen_max: 7.30
+        n_instruments: 4
+
+  t_theta_embedding_net:
+    - block_type: "PositionalEncoding"
+      kwargs:
+        n_freqs: 5
+        encode_theta: False
+    - block_type: "DenseResidualNet"
+      kwargs:
+        hidden_dims: [64, 32]
+        activation: "GELU"
+        output_dim: 32
+        dropout: 0.0
+        use_batch_norm: False
+
+  vectorfield_net:
+    network_type: "DenseResidualNet"
+    kwargs:
+      hidden_dims: [64, 32]
+      activation: "GELU"
+      dropout: 0.3
+      use_batch_norm: True
+
+# -----------------------------------------------------------------------------
+# TRAINING
+# -----------------------------------------------------------------------------
+
+training:
+
+  stage_0:
+    backup_interval: 5
+    batch_size: 512        # smaller than Phase 0 — transformer uses more memory
+    data_transforms: []
+    early_stopping:
+      stage_patience: 50
+    epochs: 512
+    float32_matmul_precision: "high"
+    gradient_clipping:
+      enabled: True
+      max_norm: 1.0
+    logprob_evaluation:
+      interval: null
+      n_samples: 256
+      ode_solver:
+        method: "dopri5"
+        tolerance: 1.0e-3
+    optimizer:
+      type: "AdamW"
+      kwargs:
+        lr: 3.0e-4         # slightly lower than Phase 0 for transformer stability
+    scheduler:
+      type: "ReduceLROnPlateau"
+      kwargs:
+        factor: 0.5
+        patience: 10
+        min_lr: 5.0e-8
+    use_amp: False
+
+# -----------------------------------------------------------------------------
+# LOCAL
+# -----------------------------------------------------------------------------
+
+local:
+  device: "mps"   # Apple Silicon; pristine fm4ar's "auto" = cuda|cpu only
+  max_runtime: 86400
+  htcondor:
+    bid: 50
+    n_cpus: 8
+    n_gpus: 1
+    memory_cpus: 64000
+    gpu_type: "H100"
