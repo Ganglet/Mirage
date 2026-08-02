@@ -65,10 +65,10 @@ def main():
     wl, edges = abc_grid()
 
     # ── training-kernel envelope: correlation lengths the embedding trained on ──
-    gen = CorrelatedNoiseGenerator(
+    gen = CorrelatedNoiseGenerator(   # P3-D1 extended envelope (short edge lowered)
         sigma_min=0.05, sigma_max=0.30, rho_min=0.3, rho_max=0.8,
-        se_length_min=0.10, se_length_max=1.00,
-        ou_length_min=0.50, ou_length_max=3.00, random_seed=0,
+        se_length_min=0.02, se_length_max=1.00,
+        ou_length_min=0.05, ou_length_max=3.00, random_seed=0,
     )
     train_L = []
     for _ in range(300):
