@@ -6,6 +6,7 @@ fm4ar/
 sbi-ear/
 
 # Data — never commit, download via scripts/download_mast.py and scripts/download_abc.py
+# (includes real JWST data e.g. data/jwst_wasp39b_oot/ — >100MB files, D11 → Zenodo)
 data/
 
 # Model checkpoints and training outputs

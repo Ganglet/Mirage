@@ -16,6 +16,12 @@ import numpy as np
 _ABC_MEAN = np.array([1201.1842, -5.9989, -6.5019, -5.9979, -4.4954, -6.4910])
 _ABC_STD = np.array([681.0441, 1.7337, 1.4457, 1.7390, 0.8639, 1.4373])
 
+# Path B 7-param cloud extension: θ = [T, 5×log-abundance, log10 P_cloud].
+# Uniform-prior mean/std over the extended generation ranges (T[300,2500],
+# logX[-9,-1], log P_cloud[2,6]); std = range/√12.
+_ABC_CLOUD_MEAN = np.array([1400.0, -5.0, -5.0, -5.0, -5.0, -5.0, 4.0])
+_ABC_CLOUD_STD = np.array([635.1, 2.309, 2.309, 2.309, 2.309, 2.309, 1.155])
+
 _REGISTERED = False
 
 
@@ -49,6 +55,8 @@ def register() -> None:
     def get_mean_and_std(dataset: str, **kwargs):
         if dataset == "abc":
             return _ABC_MEAN, _ABC_STD
+        if dataset == "abc_cloud":
+            return _ABC_CLOUD_MEAN, _ABC_CLOUD_STD
         return _orig_stats(dataset, **kwargs)
 
     _ts.get_mean_and_std = get_mean_and_std
