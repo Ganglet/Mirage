@@ -266,11 +266,11 @@ class CycleGAN(nn.Module):
                   + self.lambda_id * loss_id)
 
         metrics = {
-            "loss_G":     float(loss_G),
-            "loss_G_AB":  float(loss_G_AB),
-            "loss_G_BA":  float(loss_G_BA),
-            "loss_cyc":   float(loss_cyc),
-            "loss_id":    float(loss_id),
+            "loss_G":     float(loss_G.detach()),
+            "loss_G_AB":  float(loss_G_AB.detach()),
+            "loss_G_BA":  float(loss_G_BA.detach()),
+            "loss_cyc":   float(loss_cyc.detach()),
+            "loss_id":    float(loss_id.detach()),
         }
         return loss_G, metrics
 
@@ -295,9 +295,9 @@ class CycleGAN(nn.Module):
         loss_D = 0.5 * (loss_D_A + loss_D_B)
 
         metrics = {
-            "loss_D":   float(loss_D),
-            "loss_D_A": float(loss_D_A),
-            "loss_D_B": float(loss_D_B),
+            "loss_D":   float(loss_D.detach()),
+            "loss_D_A": float(loss_D_A.detach()),
+            "loss_D_B": float(loss_D_B.detach()),
         }
         return loss_D, metrics
 
