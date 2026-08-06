@@ -2,7 +2,7 @@
 
 **Phase:** 3 — Real JWST data + calibration
 **Track:** 1 — Core Inference Architecture
-**Status:** In progress (P3-D1 done)
+**Status:** Real-data arc COMPLETE + POSITIVE (P3-D1–D13); radius fix + OT calibration → calibrated physical WASP-39b retrieval. Next: Aug-29 workshop writeup.
 **Weeks:** 9–10
 **Branch:** `phase-3-track-1`
 
@@ -108,11 +108,15 @@ Health check: real loss ≈0.5–2.0 decreasing, NOT 0.000 + command-buffer spam
 - [x] WI-2 real-data adapter — **DONE**. Published Carter et al. 2024 benchmark spectrum (Zenodo 10161743) → `data/jwst_wasp39b_spectrum.csv` (331 pts, 6 sub-bands, 0.52–5.33 µm, median depth 0.0213 = WASP-39b's known depth ✓). Adapter → first real model-input (47/52 bins). **+2σ distribution-shift CONFIRMED on real data** (mean +2.17σ, matched the +2.15σ stub) — WASP-39b sits in the tail of ABC's training distribution → RoPE-OT (WI-5) territory.
 - [x] WI-4 first real-data ESS (`scripts/real_ess.py`, two-env IS pipeline) — ESS=1 collapse (P3-D5); base χ²=3565 → cov-arm 24× better. Raw ESS shown to be a tiny-σ metric artifact (P3-D6).
 - [x] Fixes 1–2 (P3-D6): coverage retrain (`abc_ext`) + shape-conditioning (`transformer_abc_shape`) → literature-consistent params (T=1057, log H2O=−3.2); realistic error-budget fix.
-- [x] WI-5 direction changed — RoPE-OT is **moot** (can't calibrate a misspecified forward model). Built our own NS reference (`taurex_retrieve.py`) instead of FASTER (incompatible params).
-- [x] **Definitive diagnosis (P3-D7): forward-model misspecification** — cold-flat (χ²=2.55) beats physical hot (χ²=301); ruled out coverage / radius / clouds (Path B) / resolution. Paper = Path A.
-- [ ] WI-6 WASP-96b — not pursued (moot given P3-D7)
-- [ ] Write Path-A paper (systematic sim-to-real diagnosis) — Aug 29 workshop
+- [x] Built our own NS reference (`taurex_retrieve.py`) instead of FASTER (incompatible params).
+- [~] **P3-D7 diagnosis "forward-model misspecification" — OVERTURNED (see P3-D11).** It was a fixed-radius artifact, not misspecification. Kept here for the record; the ruling-out was still rigorous, it just pointed at the wrong cause.
+- [x] **Forward-model fidelity RULED OUT as the fix (P3-D8/D9/D10):** NS-first probes — T-gradient (P3-D8), SO2 (P3-D9, ExoTransmit `opacSO2.dat`), and full ExoMolOP R=15000 all-6-molecule opacities (P3-D10, `data/opacity_hifi/`) all STILL rail to cold-flat. Fidelity is not the limiter.
+- [x] **THE FIX — float the planet radius (P3-D11):** WASP-39b is fit by TauREx in the literature ⇒ the SETUP was wrong. Radius was held fixed at 1.27 RJ; freeing it (`taurex_retrieve --fitrad`) → T=606 K, R=1.229, **χ²/N=0.76**, log H2O=−3.25 (literature). Cold-flat was a fixed-radius/baseline artifact. Even the OLD lo-fi opacities fit once radius is free.
+- [x] **Retrain MIRAGE with radius in θ (P3-D11/D12):** θ=[rp,T,5×logX], WASP-39b geometry fixed except radius (`generate_training_data --tprofile radius`, `_ABC_RAD` stats, `configs/noisecond_rad_cov`). Trained (val 1.16). **Eval on real WASP-39b: best-fit χ²/dof=0.06** (was 301), IS-reweighted recovers radius=1.22 + log H2O≈−3.0 (NS-corroborated). Radius fix works end-to-end.
+- [x] **WI-5 / Component 4 RoPE-OT calibration — DONE + SUCCESS (P3-D13):** `scripts/ot_calibrate.py` — Gaussian(Bures)-OT transports the FMPE posterior onto the NS anchor. Calibrated posterior radius=1.227±0.009, T=636±131, log H2O=−3.46±0.73 — all NS/literature-consistent; **coverage 7/7 params (NS mean in MIRAGE 68%), was 2/7 raw.** (Raw IS-ESS 5→12 = wrong harsh metric for a peaked 47-bin likelihood; report coverage/JS-vs-NS.)
+- [ ] WI-6 WASP-96b — not pursued (single-target sufficient for the workshop; multi-target = ICML/Track-2)
+- [ ] Write the workshop paper — Aug 29 (report coverage/JS-vs-NS, not raw ESS)
 
-**PHASE 3 CONCLUSION:** the sim-to-real gap for real JWST is dominated by **forward-model fidelity**, not domain coverage, cloud parameters, or resolution — demonstrated via a systematic ablation with independent nested-sampling cross-checks and realistic error budgets. This is the project's failure-mode #3, cleanly diagnosed. A positive real-data retrieval needs a fundamentally better forward model (clouds + T-gradient + SO2 + higher-fidelity opacities) — future work beyond the Aug-29 scope. See P3-D5/D6/D7.
+**PHASE 3 CONCLUSION (revised — real-data arc COMPLETE + POSITIVE):** the real-JWST sim-to-real gap for WASP-39b was NOT forward-model misspecification (P3-D7 overturned) — it was the **radius/baseline degeneracy**: MIRAGE's θ lacked a radius parameter, so it could not absorb a ~3% baseline mismatch and collapsed (ESS=1). **Adding radius to θ fixes the fit (χ² 301→0.06) and recovers radius + water; RoPE-OT calibration (Component 4) then yields a physical, literature-consistent, well-covered posterior (7/7 vs an independent NS retrieval).** Result = "MIRAGE, with radius inference + OT calibration, produces a calibrated physical retrieval of real JWST WASP-39b." Forward-model fidelity (gradient/SO2/hi-fi opacities) was systematically ruled out along the way. See P3-D8–D13.
 
-→ Decisions: P3-D1 in `problems_and_decisions.md`.
+→ Decisions: P3-D1–D13 in `problems_and_decisions.md`.
