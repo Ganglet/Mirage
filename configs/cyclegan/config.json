@@ -1,0 +1,14 @@
+{
+  "epochs": 200,
+  "batch_size": 64,
+  "lr": 0.0002,
+  "n_bins": 52,
+  "n_res": 9,
+  "ngf": 64,
+  "ndf": 64,
+  "lambda_cyc": 10.0,
+  "lambda_id": 5.0,
+  "n_abc_samples": 2000,
+  "n_real_samples": 500,
+  "device": "cpu"
+}
