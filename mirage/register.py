@@ -22,6 +22,21 @@ _ABC_STD = np.array([681.0441, 1.7337, 1.4457, 1.7390, 0.8639, 1.4373])
 _ABC_CLOUD_MEAN = np.array([1400.0, -5.0, -5.0, -5.0, -5.0, -5.0, 4.0])
 _ABC_CLOUD_STD = np.array([635.1, 2.309, 2.309, 2.309, 2.309, 2.309, 1.155])
 
+# P3-D8 gradient forward model: θ = [T_surface, T_top, 5×log-abundance] (no cloud).
+# Isothermal T is replaced by a 2-point vertical profile so the network can
+# represent the P-T structure the isothermal model cannot (the diagnosed
+# misspecification). Uniform-prior mean/std over the generation ranges
+# (T_surface,T_top ∈ [300,2500], logX ∈ [-9,-1]); std = range/√12.
+_ABC_GRAD_MEAN = np.array([1400.0, 1400.0, -5.0, -5.0, -5.0, -5.0, -5.0])
+_ABC_GRAD_STD = np.array([635.1, 635.1, 2.309, 2.309, 2.309, 2.309, 2.309])
+
+# P3-D11 radius model: θ = [rp_rj, T, 5×log-abundance]. Freeing the planet radius is
+# what flipped the real WASP-39b retrieval physical (NS χ²=0.76 vs cold-flat 2.55) —
+# the baseline degeneracy MIRAGE couldn't absorb with a fixed radius. Uniform-prior
+# mean/std over generation ranges (rp_rj[0.8,1.6], T[300,2500], logX[-9,-1]); std=range/√12.
+_ABC_RAD_MEAN = np.array([1.2, 1400.0, -5.0, -5.0, -5.0, -5.0, -5.0])
+_ABC_RAD_STD = np.array([0.2309, 635.1, 2.309, 2.309, 2.309, 2.309, 2.309])
+
 _REGISTERED = False
 
 
@@ -57,6 +72,10 @@ def register() -> None:
             return _ABC_MEAN, _ABC_STD
         if dataset == "abc_cloud":
             return _ABC_CLOUD_MEAN, _ABC_CLOUD_STD
+        if dataset == "abc_grad":
+            return _ABC_GRAD_MEAN, _ABC_GRAD_STD
+        if dataset == "abc_rad":
+            return _ABC_RAD_MEAN, _ABC_RAD_STD
         return _orig_stats(dataset, **kwargs)
 
     _ts.get_mean_and_std = get_mean_and_std
