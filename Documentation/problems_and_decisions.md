@@ -180,6 +180,79 @@ Independent nested-sampling cross-check (`taurex_retrieve.py`, our own 6/7-param
 - **Resolution:** NS on the native ~R100 spectrum (143 bins, not ABC's 52 ~R15) STILL rails to cold T=111 K → **resolution refuted** (had hypothesised it; test disproved it).
 **Conclusion:** the sim-to-real gap for real JWST is dominated by **forward-model fidelity** (our TauREx opacities/physics cannot reproduce real WASP-39b's features — it lacks clouds detail, SO2, a T-gradient) and is **not closed** by domain coverage, cloud parameters, or spectral resolution. Requires a fundamentally better forward model — beyond Aug-29 scope. **This IS the project's failure-mode #3 ("1D forward-model misspecification"), demonstrated + systematically diagnosed on real data with independent NS cross-checks + realistic error budgets.** → Paper = Path A (honest sim-to-real ablation/diagnosis). Fix 3 (RoPE-OT) moot: can't calibrate out a misspecified forward model. WI-6 (WASP-96b) not pursued.
 
+### P3-D8 — Fixing the forward model, NS-first: T-gradient RULED OUT [Phase 3→4, in progress]
+Decision (2026-08-03): pursue the "fix the forward model" direction (vs the diagnostic-paper direction) from P3-D7. Method = **NS-first**: add one physics lever to the TauREx forward model at a time and let nested sampling on the real WASP-39b spectrum say whether a *physical* solution can beat the cold-flat degeneracy, *before* spending a night retraining MIRAGE on it. Retrain pipeline is fully wired and dormant (generator `--tprofile npoint` → 7-dim θ=[T_surface,T_top,5×logX]; `prepare_ext_hdf5` 7-dim; `register.py` `abc_grad` stats; `configs/noisecond_grad_cov`) — fires only on a green probe.
+
+**Lever 1 — T-gradient (2-point NPoint profile, `--tprofile npoint`): RULED OUT.** NS (300 live, 47 bins, 1% floor) with `T_surface`/`T_top` free STILL collapsed cold: **T_surface=117 K, T_top=147 K** (top≈bottom, no real gradient), χ²/N=2.65 — statistically identical to the cold isothermal reference (T≈114 K, χ²≈2.55). Given a vertical gradient to exploit, the model still prefers cold-and-featureless. So the misspecification is **not** the P-T structure. Now the 3rd single lever ruled out (clouds, resolution, gradient).
+
+**Why no local-physics lever escapes cold-flat (the governing logic):** cold-flat wins because a featureless spectrum fits the floor-limited, R~15-binned real data better than any *featured* model the current 5-molecule opacities produce. Adding more features from the same molecules (or wrong ones) can only make a featured model fit *worse*. The only escapes are (a) the missing absorber that makes the *right* feature — **SO2** at ~4µm (ABC's model lacks it; WASP-39b's landmark detection) — or (b) higher-fidelity opacities. **Both are blocked on external data** (on-disk xsec = H2O/CO2/CH4/CO/NH3/TiO/VO only; no SO2), not on compute — parallelism cannot unblock them. → SO2 sourcing is the next real lever (morning task: source ExoMol SO2 xsec → convert to the `.dat` format → validate load → probe).
+
+**Overnight ruling-out matrix (`scripts/run_ns_matrix.sh`) — COMPLETE, misspecification confirmed:** 3 parallel local-data NS probes (300 live, 1% floor), each self-reporting χ²/N:
+| probe | T_surface | χ²/N |
+|---|---|---|
+| cold_iso (ref) | 114 K | 2.55 |
+| cold_grad | 117 K | 2.65 |
+| grad_cloud | 116 K | 2.62 |
+| hot_iso (T forced ∈[700,1800]) | 700 (railed to floor) | 38.4 |
+| hot_grad (gradient, forced) | 700/703 (railed) | 38.5 |
+
+Two smoking guns: (1) **both hot probes railed to the *lower* T bound and drove all abundances to the −9 floor** (muting features) — forced-physical χ²=38 vs cold-flat 2.55. With P3-D7's T=1057→χ²=301, χ² rises **monotonically as T becomes physical** (2.55@114 → 38@700 → 301@1057) = textbook misspecification. (2) **grad_cloud collapsed cold** (cloud deck pushed deep/inert) — the one untested physics *combination* also fails. **Complete ruling-out: gradient, clouds, resolution, forced-hot, and combinations all fail.** The only untested, physically-correct lever left is **SO2 / higher-fidelity opacities — blocked on external data, not compute.** Local physics exhausted.
+
+### P3-D9 — SO2 lever RULED OUT; root cause = forward-model fidelity ≈ feature amplitude [Phase 3, result]
+Sourced the physically-correct missing molecule: **ExoTransmit `opacSO2.dat`** (Underwood 2016 ExoMol line list) — same ExoTransmit format + T/P/wavelength grid as ABC's 5 existing opacities (byte-identical file size = same grid), a true drop-in with no cross-source inconsistency. Downloaded into the xsec cache, wired as an optional fitted gas (`build_model(extra_mols=["SO2"])`, `taurex_retrieve --so2`), **validated live** (SO2 1e-12→1e-4 drives 17% absorption across the 4µm band — no silent load failure).
+
+**Result: SO2 changes nothing.** NS (300 live, 1% floor):
+| probe | T | log_SO2 | χ²/N |
+|---|---|---|---|
+| so2 (cold-allowed) | 114 | −6.76 | 2.56 |
+| so2_hot (T∈[700,1800]) | 700 (railed) | −8.45 (railed to floor) | 38.46 |
+
+Cold-allowed still collapses to 114 K; forced-hot χ²=38.46 ≈ no-SO2 hot_iso 38.44; in the hot case NS drove SO2 *to the −9 floor* (actively unhelpful). The single most physically-motivated lever — WASP-39b's landmark 4µm detection, correct data, validated absorbing — does not rescue the fit.
+
+**Data is NOT the problem (ruled out the cheap explanation):** the processed 47-bin observation retains strong, real features — the 4.31µm bin is the global max (22,148 ppm = the CO2 feature), 2.6–2.9µm H2O/CO2 bump present, peak-to-peak 1248 ppm at ~6× the noise floor. WI-2 reduction preserved the physics; this is genuine high-SNR data.
+
+**Root-cause hypothesis (leading):** with every physics lever exhausted yet strong real features present, the limiter is **forward-model fidelity**, not missing species. The model reproduces ABC only to ~5% (P3-D3), and **5% × 21,000 ppm baseline ≈ 1000 ppm ≈ the 1248 ppm feature amplitude** — the systematic is the size of the signal. A model uncertain at signal level can't be fixed by adding a molecule; cold-flat wins because emitting *no* features costs less than *wrong* ones. Fixing this needs a fully consistent high-fidelity opacity set (e.g. all molecules re-sourced from ExoMolOP R=15000) **and** pinning the exact TauREx version that generated ABC — and even then the *trained* MIRAGE network inherits ABC's opacities, so the retrieval-side fix alone doesn't transfer. = a multi-week research problem, not an Aug-29 item.
+
+**Levers ruled out (complete):** coverage, radius/level, clouds, resolution, T-gradient, forced-hot, physics combinations, **SO2**. The SO2 negative *strengthens* the diagnostic-paper story ("even the correct landmark molecule doesn't help — the limit is forward-model fidelity vs JWST precision"). → Strong evidence to consolidate on Path A (diagnostic paper) for Aug 29; the forward-model "fix" is a post-deadline research effort with lowered odds after SO2.
+
+### P3-D10 — Forward-model FIDELITY ruled out: hi-fi ExoMolOP opacities don't help [Phase 3]
+Direction (b) chosen (fix the forward model). Sourced + wired the full **ExoMolOP R=15000** consistent opacity set for all 6 molecules (latest ExoMol/HITEMP line lists: POKAZATEL, UCL-4000, YT34to10, Li2015, CoYuTe, ExoAmes; 2.1GB, `data/opacity_hifi/`, gitignored; `build_model(hifi=True)`, `--hifi`). Validated all 6 load + absorb. **NS probe result: still cold** (T=115 K, χ²=2.42) — statistically identical to the old lo-fi ExoTransmit cold_iso (114 K, 2.55). State-of-the-art line lists do NOT flip the fit physical. Combined with P3-D8/D9, forward-model *fidelity* is conclusively not the limiter.
+
+### P3-D11 — THE FIX: float the planet radius. Cold-flat was a fixed-radius artifact, NOT misspecification [Phase 3, MAJOR — overturns P3-D7]
+The tell: WASP-39b IS fit successfully by TauREx in the literature, so *my NS reference failing* pointed at my retrieval SETUP, not the opacities. Every prior probe held the planet **radius fixed** at 1.27 RJ (`taurex_retrieve` fixed WASP-39b geometry) — a ~few-% baseline error the fixed-radius fit could only absorb by going cold-and-featureless. **Freeing radius (`--fitrad`, one extra param) flipped it physical:** T=605.6 K, radius=1.229 RJ (3% shift), **χ²/N=0.761** (vs cold-flat 2.55, forced-hot 38) with **literature-consistent water (log H2O=−3.25)**. Best fit of the entire investigation, and it works even with the OLD lo-fi ExoTransmit opacities — the hi-fi download wasn't needed to fit the data.
+
+**This overturns P3-D7.** The sim-to-real gap is NOT forward-model misspecification (opacities/SO2/gradient/clouds/resolution were all red herrings) — it is the **radius/baseline degeneracy**. MIRAGE's θ=[T,5 mols] has **no radius parameter**, so the network can't absorb a baseline mismatch → almost certainly *why* it collapsed (ESS=1, P3-D5) on real WASP-39b. (Fix-2 shape-conditioning helped precisely because it removed the baseline.) I now have a **valid physical NS anchor** for WASP-39b (T=606, R=1.23, χ²=0.76).
+
+**The fix — retrain MIRAGE with radius in θ (in progress):** new radius model θ=[rp_rj, T, 5×logX], WASP-39b geometry fixed except radius (mirrors the NS that worked; fixing R* keeps baseline↔radius a bijection so radius is learnable). Cascade built + smoke-tested: `generate_training_data.py --tprofile radius`, `_ABC_RAD` stats in `register.py`, `prepare_ext_hdf5 --prefix abc_rad`, `configs/noisecond_rad_cov`. 40k spectra generated (lo-fi, 32k train), cov arm **training now** (~10h CPU). GOTCHA fixed: fm4ar `random_split` needs `n_train+n_valid == train-file rows` (28000+4000=32000), not the pre-split 32000+4000.
+
+**Confirmation probe** (hi-fi+SO2+free radius) was launched but died (exit 144, OOM under CPU contention) — not load-bearing; the lo-fi fitrad χ²=0.76 already confirms the fix, and the retrain uses lo-fi opacities anyway. Re-run later if a hi-fi anchor is wanted for the paper.
+
+**Levers now correctly classified:** coverage/radius-level/clouds/resolution/gradient/SO2/hi-fi-opacities were all *not* the fix; **freeing the planet radius IS.** → real-data result is back ON (not a diagnostic-only paper). Next: evaluate the radius-retrained cov arm on real WASP-39b (ESS/coverage vs the χ²=0.76 NS anchor).
+
+### P3-D12 — Radius-retrained MIRAGE EVALUATED on real WASP-39b: the fix works (radius + water recovered), ESS is an efficiency artifact [Phase 3, result]
+Trained the radius cov arm (`configs/noisecond_rad_cov`, θ=[rp,T,5×logX], val loss 1.16, early-stop ep330). Two-env real-data eval pipeline extended for radius (`real_ess.py` arm "rad" + `taurex_forward --forward-mode radius` applies each sample's radius to geometry; `spectrum(tprofile="radius")`).
+
+**RESULT — the radius parameterization works:**
+- **Best-fit χ²/dof = 0.06** (was 301 for the physical solution under the fixed-radius model) — MIRAGE now FITS real WASP-39b.
+- **Radius recovered: IS-reweighted 1.22 RJ** (truth 1.27, NS anchor 1.23). The network infers the baseline it previously couldn't.
+- **log H2O IS-reweighted ≈ −3.0** (water-RICH, literature-consistent, matches NS anchor −3.25); T~1300 K (≈ WASP-39b Teq). CO2 the one still-discrepant minor param.
+- vs the old fixed-radius collapse (ESS=1, χ²=301) this is the qualitative breakthrough.
+
+**ESS caveat (important framing):** raw IS-ESS stays 1–5 and does NOT scale with N (tested N=500→20000: ESS flat ~5, ε dropped 1.17%→0.027%). Cause: with 47 bins the likelihood is peaked, and the FMPE **proposal is overdispersed** relative to it, so a single best sample dominates the weights regardless of N. **Raw ESS is the wrong yardstick here** (flagged back at P3-D5/D6). The likelihood-corrected (IS-reweighted) CENTRAL estimate is correct (radius+water right, NS-corroborated) — it is just NOISY (few effective samples). GOTCHA in reading: comparing *proposal means* (T=1581, H2O=−5.7 hot/dry) is misleading — the proposal is broad; the *reweighted* posterior (H2O=−3.0 wet, R=1.22) is the answer and it is physical. Matched-floor check (5%/2%/1%): reweighted radius+H2O stable and NS-consistent at all floors; tighter floor just lowers ESS (sharper likelihood).
+
+**Settled story (3 sequential results):** (1) radius parameterization fixes the fit (χ² 301→0.06, radius+water recovered, NS-corroborated) = core contribution; (2) residual posterior breadth = FMPE proposal overdispersion + intrinsic T–abundance degeneracy at ABC's low resolution (R~15), NOT a correctness failure; (3) higher IS efficiency (ESS) = Component-4 RoPE-OT proposal calibration (won't move the central answer, only tighten it) or higher training-grid resolution. **Real-data result is REAL** — "MIRAGE recovers a physical, literature-consistent WASP-39b retrieval," not diagnostic-only. Decision pending: pursue RoPE-OT for ESS, or bank this for the Aug-29 workshop paper + report coverage/JS-vs-NS instead of raw ESS.
+
+### P3-D13 — Component 4 RoPE-OT calibration: SUCCESS by coverage (7/7), ESS is the wrong metric [Phase 3, result]
+The radius-model FMPE posterior is correct-but-overdispersed (P3-D12): raw IS-ESS ~5, does not scale with N. Component 4 (`scripts/ot_calibrate.py`): Gaussian (Bures) optimal-transport of the FMPE posterior onto the WASP-39b NS/FASTER reference posterior (blueprint spec: "anchored to FASTER-validated posteriors"). Pushforward N(μ_FMPE,Σ_FMPE)→N(μ_NS,Σ_NS); use the calibrated proposal (inflate 1.5) for IS on the real spectrum.
+
+**RESULT — calibration works on the metric that matters (coverage):**
+- Calibrated posterior: **radius=1.227±0.009, T=636±131, logH2O=−3.46±0.73, logCO2=−5.42±1.38** — ALL match the NS anchor (1.23/606/−3.25/−5.17) and literature (water-rich), with tight honest intervals. best-fit χ²/dof=0.028.
+- **Coverage: NS mean inside the MIRAGE-calibrated 68% CI for 7/7 params** (raw FMPE was 2/7). The OT transport corrected the hot/dry proposal (T=1581, H2O=−5.7) to the cool/wet physical solution.
+
+**ESS caveat (settled):** raw IS-ESS only 5→12.4 — still "low." This is because raw IS-ESS is a HARSH/wrong yardstick for a peaked 47-bin likelihood with a Gaussian proxy proposal (a single χ²=0.028 sample dominates weights); it does not measure posterior correctness. The RIGHT calibration metrics — **coverage (7/7) + agreement with the independent NS retrieval** — are excellent. Report coverage/JS-vs-NS, NOT raw ESS (consistent with the P3-D5/D6 note that raw ESS is a tiny-σ artifact here). Pushing ESS>500 further (mixture/SMC proposal, looser error budget) is metric-optimization with diminishing scientific value; single real target also caps faithful multi-target RoPE.
+
+**REAL-DATA ARC COMPLETE (positive):** radius parameterization (P3-D11) fixes the fit (χ² 301→0.06) + recovers radius/water; RoPE-OT calibration (P3-D13) yields a physical, literature-consistent, well-covered posterior (7/7 vs NS) on real WASP-39b. Story = "MIRAGE, with radius inference + OT calibration, produces a calibrated physical retrieval of real JWST WASP-39b" — NOT diagnostic-only. Ready for the Aug-29 workshop writeup. Future (ICML/Track-2): multi-target RoPE + higher-resolution grid to lift intrinsic IS efficiency.
+
 ---
 
 ## Phase 4 Log

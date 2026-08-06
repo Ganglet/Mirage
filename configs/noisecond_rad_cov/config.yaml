@@ -1,0 +1,126 @@
+# Phase 2 noise-conditioning ablation — ARM 3/3: +σ +covariance embedding (WI-1+WI-3)
+# Identical to noisecond_sigma plus the residual-covariance embedding
+# (use_covariance=True): the encoder reads the OOT frames, estimates Σ̂, and
+# conditions on it. This is the arm expected to restore calibration under
+# correlated noise — the headline of the ablation.
+# Context dim becomes output_dim + cov_embed_dim = 256 + 64 = 320 (auto-derived).
+
+dataset:
+  file_path: "data/abc_rad/abc_rad_train.hdf"   # P3-D11 radius model (θ=[rp_rj,T,5×logX], WASP-39b geometry)
+  n_train_samples: 28000   # n_train + n_valid MUST equal the train-file row count (32000):
+  n_valid_samples: 4000    # fm4ar random_split's the file into train/valid internally
+  random_seed: 42
+
+theta_scaler:
+  method: "MeanStdScaler"
+  kwargs:
+    dataset: "abc_rad"   # stats in mirage/register.py; radius freed = the P3-D11 fix
+
+model:
+  model_type: "fmpe"
+  random_seed: 42
+  t_theta_with_glu: True
+  context_with_glu: False
+  sigma_min: 0.0001
+  time_prior_exponent: 2.0
+
+  context_embedding_net:
+    - block_type: "SoftClipFlux"     # tame residual standardised outliers (Vasist 2023)
+      kwargs:
+        bound: 15.0
+    - block_type: "SpectraEncoder"
+      kwargs:
+        d_model: 128
+        nhead: 4
+        num_layers: 4
+        dim_feedforward: 512
+        dropout: 0.1
+        output_dim: 256
+        wlen_min: 0.55
+        wlen_max: 7.30
+        n_instruments: 4
+        use_error_bars: True   # WI-1
+        use_covariance: True   # WI-3: residual-covariance embedding of OOT frames
+        n_bins: 52
+        cov_embed_dim: 64
+        cov_method: "flatten"  # ABC P=52; switch to "eigen" (CPU/CUDA) for JWST scale
+        cov_whiten: True       # P3-D1: condition on correlation STRUCTURE, not scale
+                               # (per-λ σ carries amplitude) → real visits ~10× the
+                               # training σ stay in-distribution. Requires retrain.
+
+  t_theta_embedding_net:
+    - block_type: "PositionalEncoding"
+      kwargs:
+        n_freqs: 5
+        encode_theta: False
+    - block_type: "DenseResidualNet"
+      kwargs:
+        hidden_dims: [64, 32]
+        activation: "GELU"
+        output_dim: 32
+        dropout: 0.0
+        use_batch_norm: False
+
+  vectorfield_net:
+    network_type: "DenseResidualNet"
+    kwargs:
+      hidden_dims: [64, 32]
+      activation: "GELU"
+      dropout: 0.3
+      use_batch_norm: True
+
+training:
+
+  stage_0:
+    backup_interval: 5
+    batch_size: 512
+    data_transforms:
+      - type: "InjectCorrelatedNoise"
+        kwargs:
+          n_oot_frames: 100   # full OOT stack — fine on CPU (this arm runs on CPU)
+          config:
+            type: "CorrelatedNoiseGenerator"
+            kwargs:
+              sigma_min: 0.05   # reported ablation regime (P2-D11): clearest conditioning gap
+              sigma_max: 0.3    # stronger noise → larger logdens gap; lowering σ shrank it (0.02–0.12 → 0.22 nats)
+              se_length_min: 0.02   # P3-D1: extended DOWN from 0.10 — real JWST corr is short-range
+              se_length_max: 1.00   # (real PRISM nn-corr ~0.37 at 52 bins ⇒ se~0.02–0.05 µm); keep long tail
+              ou_length_min: 0.05   # extended DOWN from 0.50 so the envelope brackets the real structure
+              ou_length_max: 3.00
+              random_seed: 42
+    early_stopping:
+      stage_patience: 50
+    epochs: 512
+    float32_matmul_precision: "high"
+    gradient_clipping:
+      enabled: True
+      max_norm: 1.0
+    logprob_evaluation:
+      interval: null
+      n_samples: 256
+      ode_solver:
+        method: "dopri5"
+        tolerance: 1.0e-3
+    optimizer:
+      type: "AdamW"
+      kwargs:
+        lr: 3.0e-4
+    scheduler:
+      type: "ReduceLROnPlateau"
+      kwargs:
+        factor: 0.5
+        patience: 10
+        min_lr: 5.0e-8
+    use_amp: False
+
+local:
+  device: "cpu"   # covariance branch (batched-cov matmul + fancy indexing) is
+                  # unstable on MPS (command-buffer failures → loss 0.000); CPU
+                  # is the reliable path for this arm. Slower but correct.
+  max_runtime: 86400
+  htcondor:
+    bid: 50
+    n_cpus: 8
+    n_gpus: 1
+    memory_cpus: 64000
+    gpu_type: "H100"

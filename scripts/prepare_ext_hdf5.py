@@ -64,7 +64,16 @@ def main(remove_baseline=False, prefix="abc_ext", indir="data/abc_ext"):
             f.create_dataset("flux_std", data=flux_std)
         print(f"  {name}: {len(sel)} → {out}")
     print("\nParameter ranges (train):")
-    for i, nm in enumerate(["T", "log_H2O", "log_CO2", "log_CH4", "log_CO", "log_NH3"]):
+    mols = ["log_H2O", "log_CO2", "log_CH4", "log_CO", "log_NH3"]
+    if theta.shape[1] == 7 and prefix.startswith("abc_grad"):
+        names = ["T_surface", "T_top"] + mols            # P3-D8 gradient θ
+    elif theta.shape[1] == 7 and prefix.startswith("abc_rad"):
+        names = ["planet_radius", "T"] + mols            # P3-D11 radius θ
+    elif theta.shape[1] == 7:
+        names = ["T"] + mols + ["log_Pcloud"]            # Path B cloud θ
+    else:
+        names = ["T"] + mols
+    for i, nm in enumerate(names):
         t = theta[splits["train"], i]
         print(f"  {nm}: [{t.min():.2f}, {t.max():.2f}]")
 

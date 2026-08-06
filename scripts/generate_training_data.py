@@ -35,7 +35,9 @@ NOISE_PPM = (30.0, 150.0)                     # per-bin depth noise (JWST-like)
 PCLOUD_LOG = (2.0, 6.0)                        # Path B: log10 gray-cloud pressure [Pa]
 
 
-def main(n, out, seed):
+def main(n, out, seed, tprofile="isothermal"):
+    grad = (tprofile == "npoint")                 # P3-D8: 2-point gradient, θ=[T_surf,T_top,5logX]
+    radius_mode = (tprofile == "radius")          # P3-D11: θ=[rp_rj,T,5logX], WASP-39b geometry
     rng = np.random.default_rng(seed)
     # grid from ABC (wlen + widths), shared
     with h5py.File("data/abc/abc_test.hdf") as f:
@@ -56,13 +58,31 @@ def main(n, out, seed):
     for i in range(n):
         T = rng.uniform(*T_RANGE)
         logx = rng.uniform(*LOGX_RANGE, size=5)
-        logpc = rng.uniform(*PCLOUD_LOG)
-        g = dict(rp_rj=rng.uniform(*RP_RJ), mp_mj=rng.uniform(*MP_MJ),
-                 rs_rsun=rng.uniform(*RS_RSUN), ms_msun=rng.uniform(*MS_MSUN),
-                 ts=rng.uniform(*TS))
-        tm = tf.build_model(**g, use_clouds=True)
-        th = np.concatenate([[T], logx, [logpc]]).astype(np.float64)
-        spec = tf.spectrum(tm, th, wlen, wlwidth)
+        if radius_mode:
+            # P3-D11: mirror the NS that WORKED (χ²=0.76) — fix star/mass/geometry to
+            # WASP-39b, float ONLY radius + T + abundances. θ=[rp_rj,T,5logX]. Fixing rs
+            # makes the baseline (rp/rs)² a bijection of rp, so radius is learnable from
+            # the baseline (a varying star would make it degenerate). WASP-39b-targeted.
+            rp = rng.uniform(*RP_RJ)
+            g = dict(rp_rj=rp, mp_mj=tf.WASP39["mp_mj"], rs_rsun=tf.WASP39["rs_rsun"],
+                     ms_msun=tf.WASP39["ms_msun"], ts=tf.WASP39["ts"])
+            tm = tf.build_model(**g)               # isothermal, WASP-39b star
+            spec = tf.spectrum(tm, np.concatenate([[T], logx]), wlen, wlwidth)
+            th = np.concatenate([[rp, T], logx]).astype(np.float64)
+        else:
+            g = dict(rp_rj=rng.uniform(*RP_RJ), mp_mj=rng.uniform(*MP_MJ),
+                     rs_rsun=rng.uniform(*RS_RSUN), ms_msun=rng.uniform(*MS_MSUN),
+                     ts=rng.uniform(*TS))
+            if grad:                               # θ = [T_surface, T_top, 5×logX]; T_top ≤ T_surface
+                T_top = rng.uniform(T_RANGE[0], T)
+                tm = tf.build_model(**g, tprofile="npoint")
+                th = np.concatenate([[T, T_top], logx]).astype(np.float64)
+                spec = tf.spectrum(tm, th, wlen, wlwidth, tprofile="npoint")
+            else:                                  # Path B: θ = [T, 5×logX, log P_cloud]
+                logpc = rng.uniform(*PCLOUD_LOG)
+                tm = tf.build_model(**g, use_clouds=True)
+                th = np.concatenate([[T], logx, [logpc]]).astype(np.float64)
+                spec = tf.spectrum(tm, th, wlen, wlwidth)
         sig = spec.mean() * rng.uniform(*NOISE_PPM) * 1e-6   # per-planet noise scale
         theta[i] = th; flux[i] = spec
         noise[i] = np.full(52, max(sig, 1e-7))
@@ -88,5 +108,7 @@ if __name__ == "__main__":
     ap.add_argument("--n", type=int, default=200)
     ap.add_argument("--out", type=str, default="data/abc_ext/chunk0.hdf")
     ap.add_argument("--seed", type=int, default=0)
+    ap.add_argument("--tprofile", default="isothermal",  # npoint=P3-D8 gradient; radius=P3-D11
+                    choices=["isothermal", "npoint", "radius"])
     a = ap.parse_args()
-    main(a.n, a.out, a.seed)
+    main(a.n, a.out, a.seed, a.tprofile)
