@@ -26,7 +26,8 @@ T_BOUNDS = (110.0, 5500.0)
 LOGX_BOUNDS = (-9.0, -3.0)
 
 
-def main(live, FLOOR=0.01, clouds=False, highres=False, nbins=150):
+def main(live, FLOOR=0.01, clouds=False, highres=False, nbins=150, tprofile="isothermal",
+         tag="", tmin=None, tmax=None, so2=False, hifi=False, fitrad=False):
     from taurex.data.spectrum.array import ArraySpectrum
     from taurex.optimizer.nestle import NestleOptimizer
 
@@ -66,13 +67,23 @@ def main(live, FLOOR=0.01, clouds=False, highres=False, nbins=150):
     width = np.diff(edges)
     obs = ArraySpectrum(np.stack([wl, depth, err, width], axis=1))
 
-    tm = tf.build_model(**tf.WASP39, use_clouds=clouds)
+    extra_mols = ["SO2"] if so2 else []                 # P3-D9: SO2 lever (4µm feature)
+    tm = tf.build_model(**tf.WASP39, use_clouds=clouds, tprofile=tprofile,
+                        extra_mols=extra_mols, hifi=hifi)
     tm.model()                                          # force profile init (nlayers etc.)
     opt = NestleOptimizer(num_live_points=live)
     opt.set_model(tm)
     opt.set_observed(obs)
-    opt.enable_fit("T"); opt.set_boundary("T", T_BOUNDS)
-    for mol in tf.MOLECULES:                             # log-uniform mix ratios
+    # T bounds: default = ABC prior; tmin/tmax override forces a PHYSICAL range
+    # (hot probe) to quantify the χ² penalty of a non-cold-flat solution (P3-D8).
+    tb = (tmin if tmin is not None else T_BOUNDS[0],
+          tmax if tmax is not None else T_BOUNDS[1])
+    if tprofile == "npoint":                            # P3-D8: 2-point vertical gradient
+        for tp in ("T_surface", "T_top"):
+            opt.enable_fit(tp); opt.set_boundary(tp, tb)
+    else:
+        opt.enable_fit("T"); opt.set_boundary("T", tb)
+    for mol in tf.MOLECULES + extra_mols:                # log-uniform mix ratios
         opt.enable_fit(mol)
         opt.set_boundary(mol, (10.0 ** LOGX_BOUNDS[0], 10.0 ** LOGX_BOUNDS[1]))
         opt.set_mode(mol, "log")
@@ -80,7 +91,10 @@ def main(live, FLOOR=0.01, clouds=False, highres=False, nbins=150):
         opt.enable_fit("clouds_pressure")
         opt.set_boundary("clouds_pressure", (1e2, 1e6))
         opt.set_mode("clouds_pressure", "log")
-    npar = 7 if clouds else 6
+    if fitrad:                                           # P3-D11: float planet radius (Rjup)
+        opt.enable_fit("planet_radius")                  # baseline is a nuisance the fixed
+        opt.set_boundary("planet_radius", (1.0, 1.6))    # radius may set wrong -> cold-flat corner
+    npar = (7 if tprofile == "npoint" else 6) + (1 if clouds else 0) + len(extra_mols) + (1 if fitrad else 0)
     print(f"[retrieve] NS on real WASP-39b, {live} live points, {len(wl)} bins, {npar} params ...")
     opt.fit()
 
@@ -89,14 +103,38 @@ def main(live, FLOOR=0.01, clouds=False, highres=False, nbins=150):
     samples = np.asarray(opt.get_samples(0))            # (M, ndim) fit space
     weights = np.asarray(opt.get_weights(0))
     names = [str(x) for x in opt.fit_names]
-    np.savez(OUT / "wasp39b_ns_posterior.npz",
-             samples=samples, weights=weights,
-             fit_names=np.array(names, dtype=object))
     w = weights / weights.sum()
+    wmean = np.average(samples, axis=0, weights=w)
+
+    # χ²/N of the weighted-mean fit vs the observed spectrum — the headline
+    # number per probe (is the best physical fit actually good, or does it lose
+    # to cold-flat?). Computed here so each parallel probe self-reports it.
+    chi2 = float("nan")
+    try:
+        from taurex.binning import FluxBinner
+        # fit_names carry log-mode params as "log_<X>"; the model only accepts the
+        # linear name, so undo the log. T/T_surface/T_top are linear → set directly.
+        for nm, val in zip(names, wmean):
+            if nm.startswith("log_"):
+                tm[nm[4:]] = float(10.0 ** val)
+            else:
+                tm[nm] = float(val)
+        native_wn, rprs, _, _ = tm.model()
+        native_wl = 10000.0 / native_wn
+        fb = FluxBinner(wl, width)
+        _, binned, _, _ = fb.bindown(native_wl[::-1], rprs[::-1])
+        chi2 = float(np.mean(((binned - depth) / err) ** 2))
+    except Exception as e:
+        print(f"  [warn] χ² compute failed: {e}")
+
+    out = OUT / f"wasp39b_ns_posterior{('_' + tag) if tag else ''}.npz"
+    np.savez(out, samples=samples, weights=weights,
+             fit_names=np.array(names, dtype=object), chi2=chi2)
     print(f"[retrieve] posterior saved: {len(samples)} weighted samples")
     print(f"  fit_names = {names}")
-    print(f"  weighted means = {np.round(np.average(samples, axis=0, weights=w), 3)}")
-    print(f"  → {OUT/'wasp39b_ns_posterior.npz'}")
+    print(f"  weighted means = {np.round(wmean, 3)}")
+    print(f"  χ²/N (weighted-mean fit) = {chi2:.3f}")
+    print(f"  → {out}")
 
 
 if __name__ == "__main__":
@@ -106,5 +144,13 @@ if __name__ == "__main__":
     ap.add_argument("--clouds", action="store_true")     # Path B: 7-param cloud fit
     ap.add_argument("--highres", action="store_true")    # fit native-res spectrum
     ap.add_argument("--nbins", type=int, default=150)
+    ap.add_argument("--tprofile", default="isothermal",  # P3-D8: "npoint" = 2-pt gradient
+                    choices=["isothermal", "npoint"])
+    ap.add_argument("--tag", default="")                 # output filename suffix (parallel probes)
+    ap.add_argument("--tmin", type=float, default=None)  # force T lower bound (hot probe)
+    ap.add_argument("--tmax", type=float, default=None)
+    ap.add_argument("--so2", action="store_true")        # P3-D9: add + fit SO2 (4µm feature)
+    ap.add_argument("--hifi", action="store_true")       # P3-D10: ExoMolOP R=15000 opacities
+    ap.add_argument("--fitrad", action="store_true")     # P3-D11: float planet radius
     a = ap.parse_args()
-    main(a.live, a.floor, a.clouds, a.highres, a.nbins)
+    main(a.live, a.floor, a.clouds, a.highres, a.nbins, a.tprofile, a.tag, a.tmin, a.tmax, a.so2, a.hifi, a.fitrad)

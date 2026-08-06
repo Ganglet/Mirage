@@ -18,7 +18,8 @@ from pathlib import Path
 import numpy as np
 
 TUT = Path("data/abc/NeurIPS taurex tutorial")
-XSEC = (TUT / "inputs/xsec").resolve()
+XSEC = (TUT / "inputs/xsec").resolve()            # ABC ExoTransmit .dat (R~1000, older lists)
+HIFI_XSEC = Path("data/opacity_hifi").resolve()   # P3-D10 ExoMolOP R=15000 (latest lists)
 CIA = (TUT / "inputs/cia").resolve()
 MOLECULES = ["H2O", "CO2", "CH4", "CO", "NH3"]   # order matches θ[1:]
 
@@ -27,24 +28,28 @@ _CACHE_SET = False
 
 
 def build_model(rp_rj=1.0, mp_mj=1.0, rs_rsun=1.0, ms_msun=1.0, ts=6000.0,
-                use_clouds=False):
+                use_clouds=False, tprofile="isothermal", extra_mols=None, hifi=False):
     """Forward model for ONE planet's fixed geometry (Rp, Mp, R*, T*).
     Atmospheric θ (T + abundances [+ log P_cloud]) is set later via `spectrum`.
     use_clouds=True adds a gray SimpleClouds deck (Path B, 7th param) so the
-    model can represent real WASP-39b's cloud muting."""
+    model can represent real WASP-39b's cloud muting.
+    tprofile="npoint" replaces the isothermal profile with a 2-point vertical
+    gradient (fit params T_surface, T_top) — the minimal test of whether real
+    WASP-39b needs a P-T structure the isothermal model cannot represent
+    (Phase-3 forward-model-misspecification probe, P3-D8)."""
     global _CACHE_SET
     import taurex.log
     taurex.log.disableLogging()
     from taurex.cache import OpacityCache, CIACache
     if not _CACHE_SET:
         OpacityCache().clear_cache()
-        OpacityCache().set_opacity_path(str(XSEC))
+        OpacityCache().set_opacity_path(str(HIFI_XSEC if hifi else XSEC))  # P3-D10 hi-fi swap
         CIACache().set_cia_path(str(CIA))
         _CACHE_SET = True
 
     from taurex.planet import Planet
     from taurex.stellar import BlackbodyStar
-    from taurex.temperature import Isothermal
+    from taurex.temperature import Isothermal, NPoint
     from taurex.chemistry import TaurexChemistry, ConstantGas
     from taurex.model import TransmissionModel
     from taurex.contributions import (
@@ -54,10 +59,20 @@ def build_model(rp_rj=1.0, mp_mj=1.0, rs_rsun=1.0, ms_msun=1.0, ts=6000.0,
     chemistry = TaurexChemistry(fill_gases=["H2", "He"], ratio=[0.17])
     for mol in MOLECULES:
         chemistry.addGas(ConstantGas(mol, mix_ratio=1e-7))
+    for mol in (extra_mols or []):        # P3-D9: SO2 (opacSO2.dat, same ExoTransmit grid)
+        chemistry.addGas(ConstantGas(mol, mix_ratio=1e-7))
+
+    # isothermal (ABC default) vs a 2-point gradient. NPoint with no interior
+    # points = a smooth T_surface(bottom)→T_top(top) ramp across the full column;
+    # P_surface/P_top default to the atmosphere's max/min pressure.
+    if tprofile == "npoint":
+        temp_prof = NPoint(T_surface=1200.0, T_top=400.0)
+    else:
+        temp_prof = Isothermal(T=1200.0)
 
     tm = TransmissionModel(
         planet=Planet(planet_radius=rp_rj, planet_mass=mp_mj, albedo=0),
-        temperature_profile=Isothermal(T=1200.0),
+        temperature_profile=temp_prof,
         chemistry=chemistry,
         star=BlackbodyStar(temperature=ts, radius=rs_rsun, mass=ms_msun),
         atm_min_pressure=1e-1, atm_max_pressure=1e6, nlayers=100,
@@ -71,15 +86,27 @@ def build_model(rp_rj=1.0, mp_mj=1.0, rs_rsun=1.0, ms_msun=1.0, ts=6000.0,
     return tm
 
 
-def spectrum(tm, theta, wlgrid, wlwidth):
-    """θ (6,) or (7,) → (Rp/Rs)^2 binned onto wlgrid (µm).
-    θ = [T, log_H2O, log_CO2, log_CH4, log_CO, log_NH3] (+ log10 P_cloud [Pa])."""
+def spectrum(tm, theta, wlgrid, wlwidth, tprofile="isothermal"):
+    """θ → (Rp/Rs)^2 binned onto wlgrid (µm).
+    isothermal: θ = [T, log_H2O, log_CO2, log_CH4, log_CO, log_NH3] (+ log10 P_cloud).
+    npoint (P3-D8): θ = [T_surface, T_top, log_H2O, log_CO2, log_CH4, log_CO, log_NH3]."""
     from taurex.binning import FluxBinner
-    tm["T"] = float(theta[0])
-    for mol, logx in zip(MOLECULES, theta[1:6]):
-        tm[mol] = float(10.0 ** logx)
-    if len(theta) > 6:                                   # Path B cloud param
-        tm["clouds_pressure"] = float(10.0 ** theta[6])
+    if tprofile == "npoint":
+        tm["T_surface"] = float(theta[0])
+        tm["T_top"] = float(theta[1])
+        for mol, logx in zip(MOLECULES, theta[2:7]):
+            tm[mol] = float(10.0 ** logx)
+    elif tprofile == "radius":                           # P3-D11: θ=[rp_rj, T, 5×logX]
+        tm["planet_radius"] = float(theta[0])            # per-sample radius = the fix
+        tm["T"] = float(theta[1])
+        for mol, logx in zip(MOLECULES, theta[2:7]):
+            tm[mol] = float(10.0 ** logx)
+    else:
+        tm["T"] = float(theta[0])
+        for mol, logx in zip(MOLECULES, theta[1:6]):
+            tm[mol] = float(10.0 ** logx)
+        if len(theta) > 6:                               # Path B cloud param
+            tm["clouds_pressure"] = float(10.0 ** theta[6])
     native_wn, rprs, _, _ = tm.model()
     native_wl = 10000.0 / native_wn                  # µm, descending
     order = np.argsort(wlgrid)
@@ -134,9 +161,10 @@ def validate(n):
 WASP39 = dict(rp_rj=1.27, mp_mj=0.28, rs_rsun=0.895, ms_msun=0.913, ts=5400.0)
 
 
-def forward_npz(npz_path):
+def forward_npz(npz_path, mode="auto"):
     """WI-4 step 2: run the forward model on MIRAGE's θ samples with WASP-39b
-    geometry → model spectra on the sample grid. Writes real_ess_forward.npz."""
+    geometry → model spectra on the sample grid. Writes real_ess_forward.npz.
+    mode="radius" (P3-D11): θ=[rp_rj,T,5×logX], isothermal, radius applied PER SAMPLE."""
     s = np.load(npz_path)
     theta, wlen = s["theta"], s["wlen"]
     wl = np.sort(wlen)                              # ascending, for bin widths
@@ -147,12 +175,15 @@ def forward_npz(npz_path):
     order = np.argsort(wlen)
     wlwidth = np.empty_like(width_asc); wlwidth[order] = width_asc   # back to stored order
 
-    tm = build_model(**WASP39, use_clouds=(theta.shape[1] > 6))      # Path B auto-detect
+    radius_mode = (mode == "radius")
+    use_clouds = (not radius_mode) and (theta.shape[1] > 6)          # Path B auto-detect
+    tm = build_model(**WASP39, use_clouds=use_clouds)                # radius set per-sample below
+    tprof = "radius" if radius_mode else "isothermal"
     specs = np.full((len(theta), len(wlen)), np.nan)     # NaN = unphysical → 0 weight
     n_bad = 0
     for i, th in enumerate(theta):
         try:
-            specs[i] = spectrum(tm, th, wlen, wlwidth)
+            specs[i] = spectrum(tm, th, wlen, wlwidth, tprofile=tprof)
         except Exception:                                # e.g. abundances sum > 1
             n_bad += 1
         if (i + 1) % 100 == 0:
@@ -168,8 +199,9 @@ if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("--validate", type=int, default=0)
     ap.add_argument("--forward-npz", type=str, default=None)
+    ap.add_argument("--forward-mode", default="auto", choices=["auto", "radius"])
     args = ap.parse_args()
     if args.forward_npz:
-        forward_npz(args.forward_npz)
+        forward_npz(args.forward_npz, args.forward_mode)
     else:
         validate(args.validate or 8)
