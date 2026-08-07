@@ -86,7 +86,7 @@ def logdensity_at_truth(model, theta_scaler, ctx_single: dict, theta_true) -> fl
 
 
 def main(n_planets: int = 50, n_samples: int = 1000, test_seed: int = 1234,
-         clean_ref: bool = False) -> None:
+         clean_ref: bool = False, save: str | None = None) -> None:
     print("Loading arms (CPU; ODE solver needs float64) ...")
     arms = {}
     for name, d in ARMS.items():
@@ -214,6 +214,15 @@ def main(n_planets: int = 50, n_samples: int = 1000, test_seed: int = 1234,
         print("  cov−nocond Δlogdens growing with σ ⇒ conditioning helps most where")
         print("  the correlated noise is worst — the adaptivity story, made explicit.")
 
+    if save:                                   # Phase 4.2: persist arrays for figures
+        safe = {nm: nm.replace("+", "p").replace("-", "_") for nm in samples}
+        np.savez(save, truths=truths, planet_sigma=np.asarray(planet_sigma),
+                 arms=np.array(list(samples.keys()), dtype=object),
+                 arms_safe=np.array([safe[nm] for nm in samples], dtype=object),
+                 **{f"s__{safe[nm]}": np.asarray(samples[nm]) for nm in samples},
+                 **{f"ld__{safe[nm]}": np.asarray(logdens[nm]) for nm in logdens})
+        print(f"  [saved] ablation arrays → {save}")
+
 
 if __name__ == "__main__":
     p = argparse.ArgumentParser()
@@ -222,6 +231,7 @@ if __name__ == "__main__":
     p.add_argument("--test-seed", type=int, default=1234)
     p.add_argument("--clean-ref", action="store_true",
                    help="also evaluate the clean Phase-1 model (no injection) as reference")
+    p.add_argument("--save", type=str, default=None, help="npz path to persist arrays for figures")
     args = p.parse_args()
     main(n_planets=args.n_planets, n_samples=args.n_samples,
-         test_seed=args.test_seed, clean_ref=args.clean_ref)
+         test_seed=args.test_seed, clean_ref=args.clean_ref, save=args.save)

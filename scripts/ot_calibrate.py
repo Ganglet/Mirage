@@ -33,7 +33,8 @@ def _msqrt(S):                                   # symmetric PSD matrix square r
     return (V * np.sqrt(np.clip(w, 0, None))) @ V.T
 
 
-def fit(M=8000, inflate=1.5, seed=0):
+def fit(M=8000, inflate=1.5, seed=0, tag=""):
+    sfx = f"_{tag}" if tag else ""
     # FMPE proposal moments (raw 20k draws) — the OT SOURCE
     s = np.load(OUT / "real_ess_samples.npz")
     thf = s["theta"]
@@ -65,13 +66,14 @@ def fit(M=8000, inflate=1.5, seed=0):
     dq = samp - mun; maha = np.sum(dq * np.linalg.solve(Sprop, dq.T).T, axis=1)
     log_g = -0.5 * (maha + k * np.log(2 * np.pi) + logdet)
 
-    np.savez(OUT / "ot_cal_samples.npz", theta=samp, wlen=s["wlen"], log_g=log_g,
+    np.savez(OUT / f"ot_cal{sfx}_samples.npz", theta=samp, wlen=s["wlen"], log_g=log_g,
              x_obs=s["x_obs"], sig_obs=s["sig_obs"], covered=s["covered"], A=A)
-    print(f"[OT] calibrated proposal: {len(samp)}/{M} in-prior draws → forward-model next")
+    print(f"[OT] inflate={inflate} calibrated proposal: {len(samp)}/{M} in-prior draws → forward next")
 
 
-def compute(floor=0.05):
-    s = np.load(OUT / "ot_cal_samples.npz"); fwd = np.load(OUT / "ot_cal_forward.npz")
+def compute(floor=0.05, tag=""):
+    sfx = f"_{tag}" if tag else ""
+    s = np.load(OUT / f"ot_cal{sfx}_samples.npz"); fwd = np.load(OUT / f"ot_cal{sfx}_forward.npz")
     th, log_g = s["theta"], s["log_g"]
     x, sig, cov, ms = s["x_obs"], s["sig_obs"], s["covered"], fwd["model_spec"]
     m = cov & np.isfinite(sig) & (sig > 0)
@@ -100,6 +102,8 @@ if __name__ == "__main__":
     ap.add_argument("--m", type=int, default=8000)
     ap.add_argument("--inflate", type=float, default=1.5)
     ap.add_argument("--floor", type=float, default=0.05)
+    ap.add_argument("--seed", type=int, default=0)
+    ap.add_argument("--tag", default="")
     a = ap.parse_args()
-    if a.fit: fit(a.m, a.inflate)
-    elif a.compute: compute(a.floor)
+    if a.fit: fit(a.m, a.inflate, a.seed, a.tag)
+    elif a.compute: compute(a.floor, a.tag)
