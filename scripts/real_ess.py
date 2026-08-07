@@ -28,11 +28,15 @@ ARMS = {"base": "configs/transformer_abc",
         "cov": "configs/noisecond_cov",
         "ext": "configs/transformer_abc_ext",        # Fix-1 extended-coverage retrain
         "shape": "configs/transformer_abc_shape",    # Fix-2 shape (baseline removed)
-        "rad": "configs/noisecond_rad_cov"}          # P3-D11 radius cov arm (θ=[rp,T,5mols])
-# which training set's normalisation each arm expects (ext/shape/rad differ from abc)
+        "rad": "configs/noisecond_rad_cov",          # P3-D11 radius cov arm (θ=[rp,T,5mols])
+        "rad_nocond": "configs/noisecond_rad_nocond",  # Phase-4 ablation: radius, no noise cond
+        "rad_sigma": "configs/noisecond_rad_sigma"}    # Phase-4 ablation: radius, σ-only
+# which training set's normalisation each arm expects (ext/shape/rad* differ from abc)
 STATS = {"ext": "data/abc_ext/abc_ext_train.hdf",
          "shape": "data/abc_ext/abc_ext_shape_train.hdf",
-         "rad": "data/abc_rad/abc_rad_train.hdf"}
+         "rad": "data/abc_rad/abc_rad_train.hdf",
+         "rad_nocond": "data/abc_rad/abc_rad_train.hdf",
+         "rad_sigma": "data/abc_rad/abc_rad_train.hdf"}
 STATS_DEFAULT = "data/abc/abc_test.hdf"
 _COV_ARMS = ("cov", "rad")                            # arms with covariance embedding → need OOT frames
 
@@ -90,7 +94,7 @@ def sample(n, arm="base"):
              theta=theta_phys, log_q=log_q.cpu().numpy().reshape(-1),
              x_obs=x_obs, sig_obs=sig_obs, covered=covered, wlen=wl_s)
     print(f"[sample] {n} draws from '{arm}' model on real WASP-39b input")
-    if arm == "rad":                                # θ=[rp_rj, T, 5×logX]
+    if arm.startswith("rad"):                       # θ=[rp_rj, T, 5×logX]
         print(f"  θ means: radius={theta_phys[:,0].mean():.3f}RJ  T={theta_phys[:,1].mean():.0f}K"
               f"  logX={np.round(theta_phys[:,2:].mean(0),2)}   (NS anchor: R=1.23, T=606)")
     else:

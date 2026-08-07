@@ -257,7 +257,21 @@ The radius-model FMPE posterior is correct-but-overdispersed (P3-D12): raw IS-ES
 
 ## Phase 4 Log
 
-*(Empty)*
+### P4-D1 — Noise-conditioning ablation on REAL WASP-39b: cov does NOT transfer (honest negative) [Phase 4]
+Trained the two missing radius-model arms (`configs/noisecond_rad_nocond` = no noise inputs, `configs/noisecond_rad_sigma` = σ-only; cov already done) and evaluated all three on real WASP-39b (`scripts/run_ablation_real.sh`, n=1000; per-arm files `data/real_ess/abl_rad_*`). GOTCHA fixed: never run `scripts/train.py` with `PYTHONPATH=.` — the repo's `./fm4ar/` dir shadows the pip-installed editable `fm4ar` as a namespace package (`fm4ar.__file__=None`) → git-status crash. Run the env python with NO PYTHONPATH (both `mirage` + `fm4ar` are pip-installed editable).
+
+**RESULT (two agreeing metrics — robust, not noise):**
+| arm | best χ²/dof | coverage/7 | mean JS→NS |
+|---|---|---|---|
+| nocond | 0.061 | 3/7 | **0.358** (closest) |
+| sigma | 0.132 | 0/7 | 0.365 |
+| cov | 0.116 | 3/7 | **0.430** (farthest) |
+
+**Covariance conditioning does NOT help — it is slightly WORST — on real WASP-39b.** All arms recover radius≈1.2 (the radius fix is robust). σ-only is worst on coverage (consistent with Phase-2 "σ-alone overconfident"). Did NOT keep hunting metrics for a cov-favorable one (that would be cherry-picking).
+
+**Why (coherent, not a bug):** the cov arm is the ONLY one that ingests the real JWST OOT noise frames, which are OUT-OF-DISTRIBUTION vs the domain-randomized training kernel (P3-D1: real noise ~10× below trained σ, short-range). So cov conditions on OOD input and is perturbed; nocond ignores noise and does fine. **Whitening (P3-D1) narrowed but did not close the noise sim-to-real gap.** Also: single real target cannot capture cov's calibration-over-population benefit (that lives in Phase-2 ABC coverage over many planets).
+
+**Framing decision (honest):** noise-conditioning is validated on synthetic ABC (Phase 2); on real JWST the dominant gap was the radius/baseline degeneracy (P3-D11, fixed) + calibration (P3-D13, OT); the learned noise embedding does NOT transfer to real single-target data (OOD real noise). This is a stronger, more credible paper than over-claiming. Central-claim pivot candidate: the radius discovery is the more novel real-data finding. Real-data headline results = radius fix (χ² 301→0.06) + OT calibration (7/7 vs NS) — NOT noise-conditioning-on-real.
 
 ---
 
