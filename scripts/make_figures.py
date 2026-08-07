@@ -92,6 +92,68 @@ def fig3():
     print("  fig3_spectrum_fit.png")
 
 
+def fig4():
+    # full 7-param corner: OT-calibrated MIRAGE posterior vs NS anchor
+    import corner
+    s = np.load(OUT / "ot_cal_samples.npz")          # OT-calibrated proposal = calibrated posterior
+    th = s["theta"]
+    d = np.load(OUT / "wasp39b_ns_posterior_fitrad.npz", allow_pickle=True)
+    o = ["planet_radius", "T", "log_H2O", "log_CO2", "log_CH4", "log_CO", "log_NH3"]
+    idx = [list(d["fit_names"]).index(k) for k in o]
+    nsw = d["weights"] / d["weights"].sum(); nss = d["samples"][:, idx]
+    labels = ["R (R$_J$)", "T (K)", "log H₂O", "log CO₂", "log CH₄", "log CO", "log NH₃"]
+    rng = [(min(th[:, i].min(), nss[:, i].min()), max(th[:, i].max(), nss[:, i].max())) for i in range(7)]
+    fig = corner.corner(nss, weights=nsw, labels=labels, color=GREY, range=rng,
+                        plot_datapoints=False, hist_kwargs={"density": True})
+    corner.corner(th, fig=fig, color=BLUE, labels=labels, range=rng,
+                  plot_datapoints=False, hist_kwargs={"density": True})
+    fig.suptitle("Calibrated MIRAGE (blue) vs independent NS anchor (grey) — full 7-param posterior",
+                 fontsize=13)
+    fig.savefig(FIG / "fig4_corner.png", dpi=140); plt.close(fig)
+    print("  fig4_corner.png")
+
+
+def fig5():
+    # ABC ablation: noise-conditioning WINS on synthetic data (the honest other half)
+    d = np.load(OUT / "abc_ablation.npz", allow_pickle=True)
+    tr = d["truths"]; ps = d["planet_sigma"]
+    ORANGE = "#e67e22"
+    arms = [("no-cond", "no_cond", GREY), ("+σ", "psigma", ORANGE), ("+σ+cov", "psigmapcov", BLUE)]
+
+    def cov68(key):
+        s = d["s__" + key]                              # (P, N, D)
+        lo = np.quantile(s, 0.16, axis=1); hi = np.quantile(s, 0.84, axis=1)
+        return float(np.mean((lo <= tr) & (tr <= hi)))
+
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(11, 4))
+    covs = [cov68(a[1]) for a in arms]
+    ax1.bar(range(3), covs, color=[a[2] for a in arms], width=0.6)
+    ax1.axhline(0.68, ls="--", color="k", lw=1)
+    ax1.text(2.45, 0.695, "nominal 68%", ha="right", fontsize=8)
+    ax1.set_xticks(range(3)); ax1.set_xticklabels([a[0] for a in arms])
+    ax1.set_ylabel("coverage @ 68%"); ax1.set_ylim(0, 1)
+    ax1.set_title("(a) ABC: conditioning restores coverage", fontsize=10)
+    for i, c in enumerate(covs):
+        ax1.text(i, c + 0.015, f"{c:.3f}", ha="center", fontsize=9)
+
+    ldn, ldc = d["ld__no_cond"], d["ld__psigmapcov"]
+    b = np.digitize(ps, np.quantile(ps, [1 / 3, 2 / 3]))
+    gaps = [(ldc[b == k] - ldn[b == k]).mean() for k in range(3)]
+    ax2.bar(range(3), gaps, color=GREEN, width=0.6)
+    ax2.set_xticks(range(3)); ax2.set_xticklabels(["low-σ", "mid-σ", "high-σ"])
+    ax2.set_ylabel("Δ log-density  (+σ+cov − no-cond)")
+    ax2.set_title("(b) ABC: cov helps most at high noise (adaptivity)", fontsize=10)
+    for i, g in enumerate(gaps):
+        ax2.text(i, g + 0.01, f"+{g:.2f}", ha="center", fontsize=9)
+    fig.suptitle("Noise-conditioning WINS on synthetic ABC (Phase 2) — where truth is known",
+                 fontsize=12)
+    fig.tight_layout(); fig.savefig(FIG / "fig5_abc_ablation.png", dpi=160); plt.close(fig)
+    print("  fig5_abc_ablation.png")
+
+
 if __name__ == "__main__":
-    fig1(); fig2(); fig3()
+    import sys
+    which = sys.argv[1:] or ["fig1", "fig2", "fig3", "fig4", "fig5"]
+    for w in which:
+        globals()[w]()
     print(f"→ figures in {FIG}/")
