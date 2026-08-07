@@ -275,6 +275,16 @@ Trained the two missing radius-model arms (`configs/noisecond_rad_nocond` = no n
 
 ---
 
+### P4-D2 — Phase 4 completed: ABC-win figure + full corner + calibration robustness [Phase 4]
+Rounded out Phase 4 to complete (not just the real-data ablation). Three additions:
+- **ABC-ablation figure (`fig5`, the honest OTHER half):** re-ran the Phase-2 noise-conditioning ablation (`run_noisecond_ablation.py --save`, 50 planets, `data/real_ess/abc_ablation.npz`) — on synthetic data where truth is known, **noise-conditioning WINS**: coverage@68 no-cond 0.587 (overconfident) → +σ/+cov 0.687 (restored to nominal); +σ+cov − no-cond log-density gap GROWS with σ (+0.64 low → +0.87 high = adaptivity). Lets the paper show "cov wins on ABC" beside "cov doesn't transfer to real" (P4-D1) in one honest arc.
+- **Full 7-param corner (`fig4`):** calibrated MIRAGE vs NS anchor, contours track across all params.
+- **Calibration robustness (`run_robustness.sh`):** OT-cal robust to the inflation hyperparameter — inflate {1.0,1.5,2.0} → radius 1.231/1.232/1.233, logH2O −3.15/−3.09/−2.99, **7/7 coverage at all three**; with earlier floor-stability (5/2/1%), the result is not a tuning artifact.
+
+**PHASE 4 COMPLETE:** benchmark table (`phase4_benchmark.md`) + 5 figures (`figures/fig1..5`) + noise-conditioning ablation (real=negative P4-D1, ABC=win) + robustness + doc (`04_track1_phase4.md`). Real-data story is complete and honest: radius fix (χ² 301→0.06) + OT calibration (7/7 vs NS) = the win; noise-conditioning is an ABC result that doesn't transfer to the single real target (OOD real noise). Ready for Aug-29 workshop writeup.
+
+---
+
 ## Phase 5 Log
 
 *(Empty)*

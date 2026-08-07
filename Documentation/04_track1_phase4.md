@@ -2,7 +2,7 @@
 
 **Phase:** 4 — evaluation / benchmark / figures for the real-data result
 **Track:** 1 — Core Inference
-**Status:** In progress — ablation + benchmark + figures done; feeds the Aug-29 workshop paper
+**Status:** COMPLETE — ablation + benchmark + 5 figures + robustness + ABC-win figure; feeds the Aug-29 workshop paper
 **Branch:** `phase-3-track-1` (Phase-4 work continues here)
 
 ---
@@ -53,7 +53,7 @@ a physical, literature-consistent, 7/7-covered posterior.**
 
 ---
 
-## 4.4 — Figures (`figures/`)
+## 4.4 — Figures (`figures/`, `scripts/make_figures.py`)
 
 - **`fig1_radius_is_the_fix.png`** — best-fit χ²/dof across every forward-model lever
   (isothermal, +T-gradient, +clouds, +SO₂, +hi-fi ExoMolOP opacities all ≈2.5; forced-physical
@@ -61,6 +61,21 @@ a physical, literature-consistent, 7/7-covered posterior.**
 - **`fig2_mirage_vs_ns.png`** — OT-calibrated MIRAGE posterior (radius/T/log H₂O) overlaid on
   the independent NS anchor; visual of the 7/7 coverage.
 - **`fig3_spectrum_fit.png`** — real WASP-39b transit spectrum + MIRAGE best-fit model (χ²/dof≈0.03).
+- **`fig4_corner.png`** — full 7-param corner, calibrated MIRAGE (blue) vs NS anchor (grey);
+  contours track across all parameters.
+- **`fig5_abc_ablation.png`** — the honest OTHER half: on synthetic ABC (truth known),
+  noise-conditioning WINS — (a) no-cond under-covers (0.587<0.68 nominal), +σ/+cov restore to
+  0.687; (b) the +σ+cov − no-cond log-density gap GROWS with injected σ (+0.64→+0.87), the
+  adaptivity result. `scripts/run_noisecond_ablation.py --save` → `data/real_ess/abc_ablation.npz`.
+
+---
+
+## 4.5 — Robustness (`scripts/run_robustness.sh`)
+
+OT-calibration is robust to its one hyperparameter (defensive inflation): sweeping inflate ∈
+{1.0, 1.5, 2.0} gives radius 1.231/1.232/1.233, log H₂O −3.15/−3.09/−2.99, **7/7 coverage at all
+three** (ESS 10.9–14.7). With the earlier error-floor stability (5%/2%/1% → radius+H₂O stable,
+P3-D13), the calibrated result does not hinge on tuning.
 
 ---
 
