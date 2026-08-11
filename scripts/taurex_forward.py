@@ -159,9 +159,13 @@ def validate(n):
 
 # WASP-39b system params (Mancini 2018 / ERS); Rp/Rs≈0.146 → depth≈0.0213 (matches data)
 WASP39 = dict(rp_rj=1.27, mp_mj=0.28, rs_rsun=0.895, ms_msun=0.913, ts=5400.0)
+# P5 multi-target geometries (fixed except radius, per the P3-D11 radius-model recipe):
+# WASP-96b (Hellier 2014): hot Saturn, G8 star. K2-18b (Benneke 2019): cool sub-Neptune, M dwarf.
+WASP96 = dict(rp_rj=1.20, mp_mj=0.49, rs_rsun=1.05, ms_msun=1.06, ts=5540.0)
+K2_18b = dict(rp_rj=0.2352, mp_mj=0.0272, rs_rsun=0.4445, ms_msun=0.495, ts=3457.0)
 
 
-def forward_npz(npz_path, mode="auto"):
+def forward_npz(npz_path, mode="auto", planet="wasp39"):
     """WI-4 step 2: run the forward model on MIRAGE's θ samples with WASP-39b
     geometry → model spectra on the sample grid. Writes real_ess_forward.npz.
     mode="radius" (P3-D11): θ=[rp_rj,T,5×logX], isothermal, radius applied PER SAMPLE."""
@@ -177,7 +181,8 @@ def forward_npz(npz_path, mode="auto"):
 
     radius_mode = (mode == "radius")
     use_clouds = (not radius_mode) and (theta.shape[1] > 6)          # Path B auto-detect
-    tm = build_model(**WASP39, use_clouds=use_clouds)                # radius set per-sample below
+    geom = {"wasp39": WASP39, "wasp96": WASP96, "k218": K2_18b}[planet]   # P5 per-planet geometry
+    tm = build_model(**geom, use_clouds=use_clouds)                 # radius set per-sample below
     tprof = "radius" if radius_mode else "isothermal"
     specs = np.full((len(theta), len(wlen)), np.nan)     # NaN = unphysical → 0 weight
     n_bad = 0
@@ -200,8 +205,9 @@ if __name__ == "__main__":
     ap.add_argument("--validate", type=int, default=0)
     ap.add_argument("--forward-npz", type=str, default=None)
     ap.add_argument("--forward-mode", default="auto", choices=["auto", "radius"])
+    ap.add_argument("--forward-planet", default="wasp39", choices=["wasp39", "wasp96", "k218"])
     args = ap.parse_args()
     if args.forward_npz:
-        forward_npz(args.forward_npz, args.forward_mode)
+        forward_npz(args.forward_npz, args.forward_mode, args.forward_planet)
     else:
         validate(args.validate or 8)
