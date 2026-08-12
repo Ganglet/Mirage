@@ -287,7 +287,24 @@ Rounded out Phase 4 to complete (not just the real-data ablation). Three additio
 
 ## Phase 5 Log
 
-*(Empty)*
+### P5-D1 — Higher-resolution grid: improves network ACCURACY (centering), not precision/ESS [Phase 5]
+Vedanth-independent Phase-5 item (multi-target WASP-96b/K2-18b is Track-2-gated). NS-first probe first (`taurex_retrieve --fitrad --highres --nbins 150`): free-radius NS at 143 bins → χ²=0.63, **T posterior tightened ±50→±31, H2O ±0.22→±0.18** vs the 47-bin case = higher res genuinely adds information → GREEN, retrain justified.
+
+Retrain cascade (reused radius pipeline): `generate_training_data --nbins 150` (geomspace over the real 0.52–5.33µm range; θ=[rp,T,5logX]), new `configs/noisecond_rad_nocond_hires` (n_bins=150, wlen 0.52–5.33), 40k spectra → 32k train, trained nocond arm on MPS (val plateaued ~1.05, stopped on plateau). Eval arm `rad_hires` in `real_ess.py` (build_observation auto-bins to the arm's grid via stats_hdf — grid-agnostic). GOTCHA FIXED: `sample()` computed x_obs/σ on the DEFAULT 52-bin grid while ctx/covered used the arm's 150-bin grid → shape-mismatch on non-52-bin arms; fixed to `abc_grid_and_norm(stats_hdf)`.
+
+**RESULT (hi-res model on real WASP-39b, n=1000):**
+- best-fit χ²/dof=**0.038** (finest of the project; lo-res 0.06). ESS=3.7 (≈ lo-res 5, NO gain).
+- **Accuracy WIN (centering):** raw proposal T **1581→635** (now matches NS 606!), radius **1.174→1.226**; IS-reweighted radius **1.257±0.017** (truth 1.27), logH2O **−3.36** (water-rich, NS/lit-consistent).
+- **Precision/efficiency: NO improvement** — proposal T-std ~296 (≈ lo-res), ESS 3.7. The NS probe showed the data supports a tight posterior (T±31) but the amortized flow captures resolution for CENTERING, not SHARPNESS (amortization gap).
+
+**Honest finding:** higher resolution significantly improves the network's central accuracy (esp. temperature, the most-wrong parameter) but not its precision or IS-efficiency. Future work (more training / per-target refinement / sharper amortization) to close the amortization gap. Vedanth-independent Phase-5 work COMPLETE; remaining Phase 5 = multi-target (Track-2-gated) + Zenodo + full ICML paper.
+
+### P5-D2 — Multi-target (WASP-96b, K2-18b): data reality + per-planet cascade [Phase 5]
+Track-2 delivered the OOT packages for WASP-96b (NIRISS) and K2-18b (NIRISS + G395H + MIRI): per-integration frames + per-λ σ, time-axis preserved, raw (not normalised) — exactly the P2-D6 contract. **These are good and used.**
+
+**Transmission depths — Track-2 reduction RULED OUT, use PUBLISHED.** Vedanth's depth pipeline was tried twice — simple in/out mean-differencing, then per-λ batman light-curve fitting — and **both fail the known-truth test:** WASP-39b returns median depth ≈0 (batman fits rail to bounds), vs the true ~0.021; his own diagnostics report `dip_quality: none / weak_or_absent` (transit signal ~2% buried under ~12% uncorrected systematics). Extracting transit depths from raw x1dints needs full systematics detrending — a genuinely hard reduction, out of scope. **Decision: pair Vedanth's OOT frames with PUBLISHED depths** (WASP-39b Carter 2024 [have]; K2-18b Madhusudhan 2023 [sourced, OSF 36djh, depth ~0.0029 ✓]; WASP-96b Radica 2023 [pending — not programmatically downloadable, needs manual grab from supreme-spoon / MAST HLSP]).
+
+**Per-planet cascade (generalised the radius pipeline).** `generate_training_data --planet {wasp39,wasp96,k218}` selects fixed geometry + radius/T priors + grid range (from that planet's published spectrum); `taurex_forward --forward-planet`, `real_ess` per-arm `SPECTRA` + arm registration, `register.py` per-planet stats. **K2-18b is NOT just a geometry swap** — cold M-dwarf sub-Neptune (Teq~250 K, Rp~0.24 RJ) is *below* the hot-Jupiter priors, so it needs its own regeneration (Rp∈[0.10,0.40], T∈[100,600], M-dwarf geometry `K2_18b`, grid 0.85–5.17µm). WASP-96b (hot Saturn) fits the existing priors → clean geometry swap. **Order: K2-18b first (data in hand), WASP-96b once its depths are grabbed.** K2-18b: 40k generated + config built + eval wired + smoke-tested; nocond arm training. This is the most novel test — does the radius+flow method transfer from hot Saturns to a temperate sub-Neptune. GOTCHA fixed: `pgeom` vs the pre-existing `geom[]` buffer name-collision in the generator.
 
 
 ---

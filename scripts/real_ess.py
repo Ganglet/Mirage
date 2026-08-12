@@ -30,13 +30,19 @@ ARMS = {"base": "configs/transformer_abc",
         "shape": "configs/transformer_abc_shape",    # Fix-2 shape (baseline removed)
         "rad": "configs/noisecond_rad_cov",          # P3-D11 radius cov arm (θ=[rp,T,5mols])
         "rad_nocond": "configs/noisecond_rad_nocond",  # Phase-4 ablation: radius, no noise cond
-        "rad_sigma": "configs/noisecond_rad_sigma"}    # Phase-4 ablation: radius, σ-only
+        "rad_sigma": "configs/noisecond_rad_sigma",    # Phase-4 ablation: radius, σ-only
+        "rad_hires": "configs/noisecond_rad_nocond_hires",  # P5: radius, 150-bin hi-res grid
+        "k218": "configs/noisecond_rad_nocond_k218"}   # P5 multi-target: K2-18b radius model
+# per-arm real spectrum (default = WASP-39b); multi-target planets use their own published depths
+SPECTRA = {"k218": "data/jwst_k2_18b_spectrum.csv",
+           "wasp96": "data/jwst_wasp96b_spectrum.csv"}
 # which training set's normalisation each arm expects (ext/shape/rad* differ from abc)
 STATS = {"ext": "data/abc_ext/abc_ext_train.hdf",
          "shape": "data/abc_ext/abc_ext_shape_train.hdf",
          "rad": "data/abc_rad/abc_rad_train.hdf",
          "rad_nocond": "data/abc_rad/abc_rad_train.hdf",
-         "rad_sigma": "data/abc_rad/abc_rad_train.hdf"}
+         "rad_sigma": "data/abc_rad/abc_rad_train.hdf",
+         "rad_hires": "data/abc_rad_hires/abc_rad_train.hdf"}  # 150-bin grid + hi-res stats
 STATS_DEFAULT = "data/abc/abc_test.hdf"
 _COV_ARMS = ("cov", "rad")                            # arms with covariance embedding → need OOT frames
 
@@ -72,13 +78,14 @@ def sample(n, arm="base"):
 
     # real model-input (normalised with the arm's OWN training stats) + RAW depth/σ
     stats_hdf = STATS.get(arm, STATS_DEFAULT)
-    ctx_np, covered = build_observation(SPECTRUM, stats_hdf, remove_baseline=(arm == "shape"))
+    spec_csv = SPECTRA.get(arm, SPECTRUM)           # multi-target: per-planet published depths
+    ctx_np, covered = build_observation(spec_csv, stats_hdf, remove_baseline=(arm == "shape"))
     if arm in _COV_ARMS:                             # WI-3 / P3-D11 need real OOT frames
         ctx_np["oot_frames"] = _real_oot_frames()   # (K, 52), model bin order
-    wl_s, mean_s, std_s = abc_grid_and_norm()
+    wl_s, mean_s, std_s = abc_grid_and_norm(stats_hdf)   # arm's OWN grid (52 or hi-res 150)
     order = np.argsort(wl_s)
     import pandas as pd
-    depth_a, err_a, cov_a = rebin_spectrum(pd.read_csv(SPECTRUM), wl_s[order])
+    depth_a, err_a, cov_a = rebin_spectrum(pd.read_csv(spec_csv), wl_s[order])
     inv = np.argsort(order)
     x_obs = depth_a[inv].astype(np.float64)        # raw (Rp/Rs)^2, stored order
     sig_obs = err_a[inv].astype(np.float64)

@@ -37,6 +37,11 @@ _ABC_GRAD_STD = np.array([635.1, 635.1, 2.309, 2.309, 2.309, 2.309, 2.309])
 _ABC_RAD_MEAN = np.array([1.2, 1400.0, -5.0, -5.0, -5.0, -5.0, -5.0])
 _ABC_RAD_STD = np.array([0.2309, 635.1, 2.309, 2.309, 2.309, 2.309, 2.309])
 
+# P5 K2-18b radius model: cold sub-Neptune priors rp[0.10,0.40], T[100,600] (uniform,
+# std=range/√12); same θ=[rp,T,5×logX] layout as abc_rad but a very different regime.
+_ABC_RAD_K218_MEAN = np.array([0.25, 350.0, -5.0, -5.0, -5.0, -5.0, -5.0])
+_ABC_RAD_K218_STD = np.array([0.0866, 144.3, 2.309, 2.309, 2.309, 2.309, 2.309])
+
 _REGISTERED = False
 
 
@@ -76,6 +81,8 @@ def register() -> None:
             return _ABC_GRAD_MEAN, _ABC_GRAD_STD
         if dataset == "abc_rad":
             return _ABC_RAD_MEAN, _ABC_RAD_STD
+        if dataset == "abc_rad_k218":
+            return _ABC_RAD_K218_MEAN, _ABC_RAD_K218_STD
         return _orig_stats(dataset, **kwargs)
 
     _ts.get_mean_and_std = get_mean_and_std
