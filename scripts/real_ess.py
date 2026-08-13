@@ -32,7 +32,8 @@ ARMS = {"base": "configs/transformer_abc",
         "rad_nocond": "configs/noisecond_rad_nocond",  # Phase-4 ablation: radius, no noise cond
         "rad_sigma": "configs/noisecond_rad_sigma",    # Phase-4 ablation: radius, σ-only
         "rad_hires": "configs/noisecond_rad_nocond_hires",  # P5: radius, 150-bin hi-res grid
-        "k218": "configs/noisecond_rad_nocond_k218"}   # P5 multi-target: K2-18b radius model
+        "k218": "configs/noisecond_rad_nocond_k218",   # P5 multi-target: K2-18b radius model
+        "wasp96": "configs/noisecond_rad_nocond_wasp96"}  # P5 multi-target: WASP-96b (self-reduced NIRISS)
 # per-arm real spectrum (default = WASP-39b); multi-target planets use their own published depths
 SPECTRA = {"k218": "data/jwst_k2_18b_spectrum.csv",
            "wasp96": "data/jwst_wasp96b_spectrum.csv"}
@@ -42,7 +43,9 @@ STATS = {"ext": "data/abc_ext/abc_ext_train.hdf",
          "rad": "data/abc_rad/abc_rad_train.hdf",
          "rad_nocond": "data/abc_rad/abc_rad_train.hdf",
          "rad_sigma": "data/abc_rad/abc_rad_train.hdf",
-         "rad_hires": "data/abc_rad_hires/abc_rad_train.hdf"}  # 150-bin grid + hi-res stats
+         "rad_hires": "data/abc_rad_hires/abc_rad_train.hdf",  # 150-bin grid + hi-res stats
+         "k218": "data/abc_rad_k218/abc_rad_train.hdf",  # K2-18b 150-bin grid (0.85-5.17µm) + stats
+         "wasp96": "data/abc_rad_wasp96/abc_rad_train.hdf"}  # WASP-96b 90-bin NIRISS grid (0.85-2.81µm)
 STATS_DEFAULT = "data/abc/abc_test.hdf"
 _COV_ARMS = ("cov", "rad")                            # arms with covariance embedding → need OOT frames
 
@@ -101,7 +104,7 @@ def sample(n, arm="base"):
              theta=theta_phys, log_q=log_q.cpu().numpy().reshape(-1),
              x_obs=x_obs, sig_obs=sig_obs, covered=covered, wlen=wl_s)
     print(f"[sample] {n} draws from '{arm}' model on real WASP-39b input")
-    if arm.startswith("rad"):                       # θ=[rp_rj, T, 5×logX]
+    if arm.startswith("rad") or arm in ("k218", "wasp96"):   # radius-θ arms: [rp_rj, T, 5×logX]
         print(f"  θ means: radius={theta_phys[:,0].mean():.3f}RJ  T={theta_phys[:,1].mean():.0f}K"
               f"  logX={np.round(theta_phys[:,2:].mean(0),2)}   (NS anchor: R=1.23, T=606)")
     else:
