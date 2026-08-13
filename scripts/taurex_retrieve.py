@@ -24,19 +24,27 @@ OUT = Path("data/real_ess")
 # ABC prior ranges (match training) so the NS posterior is comparable to MIRAGE
 T_BOUNDS = (110.0, 5500.0)
 LOGX_BOUNDS = (-9.0, -3.0)
+# P5 per-planet: geometry + published spectrum + radius-fit bounds (K2-18b is a cold
+# sub-Neptune, so its radius bounds are far below the hot-Jupiter default)
+_PLANET = {
+    "wasp39": dict(geom=lambda: tf.WASP39, spec="data/jwst_wasp39b_spectrum.csv", rb=(1.0, 1.6)),
+    "wasp96": dict(geom=lambda: tf.WASP96, spec="data/jwst_wasp96b_spectrum.csv", rb=(0.8, 1.6)),
+    "k218":   dict(geom=lambda: tf.K2_18b, spec="data/jwst_k2_18b_spectrum.csv", rb=(0.10, 0.40)),
+}
 
 
 def main(live, FLOOR=0.01, clouds=False, highres=False, nbins=150, tprofile="isothermal",
-         tag="", tmin=None, tmax=None, so2=False, hifi=False, fitrad=False):
+         tag="", tmin=None, tmax=None, so2=False, hifi=False, fitrad=False, planet="wasp39"):
     from taurex.data.spectrum.array import ArraySpectrum
     from taurex.optimizer.nestle import NestleOptimizer
+    P = _PLANET[planet]
 
     if highres:
         # Path B/C test: fit the NATIVE-resolution WASP-39b spectrum (~R100) instead
         # of ABC's 52 bins (~R15). If the cold-T degeneracy breaks here, the sim-to-real
         # failure is a RESOLUTION mismatch (ABC/Ariel grid too coarse for real JWST).
         import pandas as pd
-        df = pd.read_csv("data/jwst_wasp39b_spectrum.csv")
+        df = pd.read_csv(P["spec"])
         lo, hi = df["wavelength_um"].min(), df["wavelength_um"].max()
         grid = np.geomspace(lo, hi, nbins)
         ge = np.empty(nbins + 1); ge[1:-1] = np.sqrt(grid[:-1] * grid[1:])
@@ -68,7 +76,7 @@ def main(live, FLOOR=0.01, clouds=False, highres=False, nbins=150, tprofile="iso
     obs = ArraySpectrum(np.stack([wl, depth, err, width], axis=1))
 
     extra_mols = ["SO2"] if so2 else []                 # P3-D9: SO2 lever (4µm feature)
-    tm = tf.build_model(**tf.WASP39, use_clouds=clouds, tprofile=tprofile,
+    tm = tf.build_model(**P["geom"](), use_clouds=clouds, tprofile=tprofile,
                         extra_mols=extra_mols, hifi=hifi)
     tm.model()                                          # force profile init (nlayers etc.)
     opt = NestleOptimizer(num_live_points=live)
@@ -93,7 +101,7 @@ def main(live, FLOOR=0.01, clouds=False, highres=False, nbins=150, tprofile="iso
         opt.set_mode("clouds_pressure", "log")
     if fitrad:                                           # P3-D11: float planet radius (Rjup)
         opt.enable_fit("planet_radius")                  # baseline is a nuisance the fixed
-        opt.set_boundary("planet_radius", (1.0, 1.6))    # radius may set wrong -> cold-flat corner
+        opt.set_boundary("planet_radius", P["rb"])       # per-planet radius bounds (P5)
     npar = (7 if tprofile == "npoint" else 6) + (1 if clouds else 0) + len(extra_mols) + (1 if fitrad else 0)
     print(f"[retrieve] NS on real WASP-39b, {live} live points, {len(wl)} bins, {npar} params ...")
     opt.fit()
@@ -152,5 +160,6 @@ if __name__ == "__main__":
     ap.add_argument("--so2", action="store_true")        # P3-D9: add + fit SO2 (4µm feature)
     ap.add_argument("--hifi", action="store_true")       # P3-D10: ExoMolOP R=15000 opacities
     ap.add_argument("--fitrad", action="store_true")     # P3-D11: float planet radius
+    ap.add_argument("--planet", default="wasp39", choices=["wasp39", "wasp96", "k218"])
     a = ap.parse_args()
-    main(a.live, a.floor, a.clouds, a.highres, a.nbins, a.tprofile, a.tag, a.tmin, a.tmax, a.so2, a.hifi, a.fitrad)
+    main(a.live, a.floor, a.clouds, a.highres, a.nbins, a.tprofile, a.tag, a.tmin, a.tmax, a.so2, a.hifi, a.fitrad, a.planet)

@@ -1,0 +1,22 @@
+{
+  "title": "MIRAGE: domain-adaptive simulation-based inference for JWST exoplanet atmospheric retrieval",
+  "description": "Code, reduced JWST transmission spectra, trained flow-matching posterior-estimation (FMPE) models, and posterior samples for MIRAGE — a simulation-based inference pipeline for exoplanet atmospheric retrieval built on radius inference and optimal-transport calibration. Includes real-data retrievals for three planets spanning a hot Saturn to a cold sub-Neptune: WASP-39b (NIRSpec PRISM), WASP-96b (NIRISS SOSS, self-reduced end-to-end from the raw MAST ramps with exoTEDRF), and K2-18b (NIRISS). Each retrieval is validated against an independent nested-sampling retrieval in the same parameter space. The radius-inference + flow method recovers the planet radius and a water-rich atmosphere across planet class, instrument, and data provenance.",
+  "upload_type": "software",
+  "access_right": "open",
+  "license": "MIT",
+  "keywords": [
+    "exoplanets",
+    "JWST",
+    "atmospheric retrieval",
+    "transmission spectroscopy",
+    "simulation-based inference",
+    "flow matching",
+    "normalizing flows",
+    "domain adaptation",
+    "optimal transport",
+    "nested sampling"
+  ],
+  "creators": [
+    {"name": "Chakravertty, Angshuman", "affiliation": "NMIMS Hyderabad"}
+  ]
+}

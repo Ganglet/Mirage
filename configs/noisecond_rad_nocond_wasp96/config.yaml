@@ -1,0 +1,115 @@
+# P5 multi-target — WASP-96b radius model (θ=[rp,T,5×logX]), NO noise conditioning.
+# Clean geometry swap from the WASP-39b radius arm: WASP-96b is a hot Saturn, so it
+# reuses the abc_rad priors/theta-scaler (Rp∈[0.8,1.6], T∈[300,2500]); only the grid
+# (0.85–2.81µm NIRISS SOSS, 90 bins, self-reduced) and encoder wlen bounds differ.
+
+dataset:
+  file_path: "data/abc_rad_wasp96/abc_rad_train.hdf"   # 90-bin NIRISS grid (0.85-2.81µm)
+  n_train_samples: 28000   # n_train+n_valid must == train-file rows (32000)
+  n_valid_samples: 4000
+  random_seed: 42
+
+theta_scaler:
+  method: "MeanStdScaler"
+  kwargs:
+    dataset: "abc_rad"      # WASP-96b hot-Saturn priors == WASP-39b radius priors
+
+model:
+  model_type: "fmpe"
+  random_seed: 42
+  t_theta_with_glu: True
+  context_with_glu: False
+  sigma_min: 0.0001
+  time_prior_exponent: 2.0
+
+  context_embedding_net:
+    - block_type: "SoftClipFlux"
+      kwargs:
+        bound: 15.0
+    - block_type: "SpectraEncoder"
+      kwargs:
+        d_model: 128
+        nhead: 4
+        num_layers: 4
+        dim_feedforward: 512
+        dropout: 0.1
+        output_dim: 256
+        wlen_min: 0.84
+        wlen_max: 2.83
+        n_instruments: 4
+        # no conditioning: encoder ignores error_bars / oot_frames
+
+  t_theta_embedding_net:
+    - block_type: "PositionalEncoding"
+      kwargs:
+        n_freqs: 5
+        encode_theta: False
+    - block_type: "DenseResidualNet"
+      kwargs:
+        hidden_dims: [64, 32]
+        activation: "GELU"
+        output_dim: 32
+        dropout: 0.0
+        use_batch_norm: False
+
+  vectorfield_net:
+    network_type: "DenseResidualNet"
+    kwargs:
+      hidden_dims: [64, 32]
+      activation: "GELU"
+      dropout: 0.3
+      use_batch_norm: True
+
+training:
+
+  stage_0:
+    backup_interval: 5
+    batch_size: 512
+    data_transforms:
+      - type: "InjectCorrelatedNoise"
+        kwargs:
+          n_oot_frames: 0
+          config:
+            type: "CorrelatedNoiseGenerator"
+            kwargs:
+              sigma_min: 0.05
+              sigma_max: 0.3
+              se_length_min: 0.02
+              se_length_max: 1.00
+              ou_length_min: 0.05
+              ou_length_max: 3.00
+              random_seed: 42
+    early_stopping:
+      stage_patience: 50
+    epochs: 512
+    float32_matmul_precision: "high"
+    gradient_clipping:
+      enabled: True
+      max_norm: 1.0
+    logprob_evaluation:
+      interval: null
+      n_samples: 256
+      ode_solver:
+        method: "dopri5"
+        tolerance: 1.0e-3
+    optimizer:
+      type: "AdamW"
+      kwargs:
+        lr: 3.0e-4
+    scheduler:
+      type: "ReduceLROnPlateau"
+      kwargs:
+        factor: 0.5
+        patience: 10
+        min_lr: 5.0e-8
+    use_amp: False
+
+local:
+  device: "mps"
+  max_runtime: 86400
+  htcondor:
+    bid: 50
+    n_cpus: 8
+    n_gpus: 1
+    memory_cpus: 64000
+    gpu_type: "H100"
