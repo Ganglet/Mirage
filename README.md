@@ -1,7 +1,7 @@
 # MIRAGE
 **Multi-Instrument Retrieval with Adaptive Generative Estimation**
 
-[![DOI](https://zenodo.org/badge/1236272658.svg)](https://doi.org/10.5281/zenodo.21924294)
+[![DOI](https://img.shields.io/badge/DOI-10.5281%2Fzenodo.21924294-1682D4)](https://doi.org/10.5281/zenodo.21924294)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 Simulation-to-real domain-adaptive atmospheric retrieval for JWST exoplanet transmission
