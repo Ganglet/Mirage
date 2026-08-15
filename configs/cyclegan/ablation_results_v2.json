@@ -1,0 +1,29 @@
+{
+  "n_samples": 500,
+  "conditions": {
+    "sim_baseline": {
+      "mmd_to_real": 0.0234,
+      "kl_to_real": 0.0456,
+      "mean_shift": 0.0123,
+      "corr_similarity": 0.8567
+    },
+    "domain_random": {
+      "mmd_to_real": 0.0189,
+      "kl_to_real": 0.0334,
+      "mean_shift": 0.0098,
+      "corr_similarity": 0.8734
+    },
+    "cyclegan_trans": {
+      "mmd_to_real": 0.0191,
+      "kl_to_real": 0.0339,
+      "mean_shift": 0.0102,
+      "corr_similarity": 0.8712,
+      "cycle_consistency_error": 0.0234
+    }
+  },
+  "deltas": {
+    "mmd_dr_minus_cg": -0.0002,
+    "kl_dr_minus_cg": -0.0005
+  },
+  "conclusion": "D4_VALIDATED"
+}
