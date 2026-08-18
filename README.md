@@ -3,6 +3,10 @@
 
 [![DOI](https://img.shields.io/badge/DOI-10.5281%2Fzenodo.21924294-1682D4)](https://doi.org/10.5281/zenodo.21924294)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+![Python](https://img.shields.io/badge/Python-3.11-3776AB?logo=python&logoColor=white)
+![PyTorch](https://img.shields.io/badge/PyTorch-EE4C2C?logo=pytorch&logoColor=white)
+![Data: JWST](https://img.shields.io/badge/data-JWST-E03C31)
+![Simulator: TauREx3](https://img.shields.io/badge/simulator-TauREx3-6E44FF)
 
 Simulation-to-real domain-adaptive atmospheric retrieval for JWST exoplanet transmission
 spectroscopy. Preliminary results targeting the NeurIPS ML4PS workshop; full paper targeting
@@ -16,6 +20,11 @@ Existing ML atmospheric retrievers train on simulated spectra and collapse on re
 MIRAGE is an end-to-end system — a multi-instrument transformer encoder, a noise-conditioned
 flow-matching posterior (built on the fm4ar backbone), and an optimal-transport calibration
 step — used to diagnose *why* the collapse happens and to close it on real data.
+
+It attacks the sim-to-real gap from **two sides**: **domain adaptation** — structured
+randomization of the training simulator so the encoder sees realistic instrument systematics
+(Track 2); and **inference** — a radius-augmented posterior plus calibration against an
+independent reference (Track 1). The two together are what make the retrieval hold up on real data.
 
 The central real-data finding: on WASP-39b, the dominant sim-to-real gap was **not** forward-model
 fidelity but a **radius / baseline degeneracy** — the network had no radius parameter, so it could
@@ -105,6 +114,17 @@ Full evidence: `Documentation/` (phase docs) and `Documentation/problems_and_dec
 
 ---
 
+## Domain adaptation
+
+Closing the gap from the **input side**: training spectra are domain-randomized with structured
+correlated noise, so the encoder sees the kind of instrument systematics it will meet on real
+data. A **CycleGAN domain-translation** variant was tested as an alternative and did **not**
+improve on structured randomization — a clean negative that rules out the added generative
+complexity. Paired with the radius-inference and calibration fixes on the inference side, MIRAGE
+treats the sim-to-real gap end to end rather than patching one half of it.
+
+---
+
 ## Setup
 
 Two environments (the ML stack and the TauREx forward model have incompatible numpy pins):
@@ -188,6 +208,9 @@ posterior samples behind the multi-target results.
 | 4 | Full evaluation + benchmark + figures | ✅ Complete |
 | 5 | Multi-target (N=3) + higher-res + Zenodo release | ✅ Complete (paper draft next) |
 
-**Tracks.** Track 1 (core inference architecture) and Track 2 (JWST data pipeline, domain
-randomisation, evaluation tooling) are developed on separate branches and merged at phase
-boundaries.
+**Tracks.** MIRAGE closes the sim-to-real gap from two sides, developed on separate branches and
+merged at phase boundaries:
+- **Track 1 — inference.** The radius-augmented flow-matching posterior, optimal-transport
+  calibration, the multi-target (N=3) retrieval, and the end-to-end WASP-96b self-reduction.
+- **Track 2 — domain adaptation & data.** Structured domain randomization, the JWST
+  data-handling pipeline, and the CycleGAN-vs-randomization study (the input-side negative result).
